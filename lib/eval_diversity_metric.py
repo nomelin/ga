@@ -7,15 +7,26 @@ class DiversityMetricCalculator:
         初始化
         obtained_optimal_set: 得到的最优解集
         """
-        self.obtained_optimal_set = obtained_optimal_set
+        # 确保 obtained_optimal_set 是 NumPy 数组
+        self.obtained_optimal_set = np.array(obtained_optimal_set)
 
     # 计算得到的非支配解集中连续解之间的欧几里得距离
     def get_distance_between_consecutive_solutions(self):
+        """
+        计算得到的非支配解集中连续解之间的欧几里得距离
+        """
+        # 检查解集是否少于两个，如果是，则返回空数组
+        if len(self.obtained_optimal_set) < 2:
+            return np.array([])
+
         distances = np.sqrt(np.sum((self.obtained_optimal_set[1:] - self.obtained_optimal_set[:-1]) ** 2, axis=1))
         return distances
 
     # 计算平均欧几里得距离
     def get_average_distance(self):
+        """
+        计算平均欧几里得距离
+        """
         distances = self.get_distance_between_consecutive_solutions()
         return np.mean(distances)
 
@@ -47,7 +58,7 @@ class DiversityMetricCalculator:
     # 计算多样性度量
     def get_diversity_metric(self):
         """
-        obtained_optimal_set: 得到的最优解集
+        计算多样性度量
         """
         average_distance = self.get_average_distance()
         extreme_solutions, boundary_solutions = self.get_extreme_and_boundary_sets()
@@ -56,7 +67,7 @@ class DiversityMetricCalculator:
         df = np.sqrt(np.sum((extreme_solutions[1] - extreme_solutions[0]) ** 2))
 
         # 计算边界解之间的距离
-        dl = np.sqrt(np.sum((boundary_solutions[1] - boundary_solutions[0]) ** 2))
+        dl = np.sqrt(np.sum((boundary_solutions[-1] - boundary_solutions[0]) ** 2))  # 取第一个和最后一个作为边界解
 
         N = len(self.obtained_optimal_set)
         distances = self.get_distance_between_consecutive_solutions()
@@ -67,12 +78,3 @@ class DiversityMetricCalculator:
 
         return diversity_metric
 
-
-# 示例：生成一组非支配解集
-np.random.seed(0)
-obtained_optimal_set = np.random.rand(100, 2)  # 示例数据，实际应从算法获取
-
-# 计算多样性度量Δ
-calculator = DiversityMetricCalculator(obtained_optimal_set)
-diversity_metric = calculator.get_diversity_metric()
-print(f"Diversity Metric (Δ): {diversity_metric}")
