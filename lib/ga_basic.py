@@ -78,25 +78,22 @@ def initialize_population(pop_size, num_bits, variable_ranges):
 
     参数:
         pop_size (int): 种群大小。
-        num_bits (int): 每个变量的二进制位数。
-        variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。需要几个变量就有几个范围。
+        num_bits (list of int): 每个变量的二进制位数。
+        variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。
 
     返回:
         list of str: 包含每个个体二进制编码的种群。
 
     示例:
-        >> initialize_population(3, 8, [(-2, 2), (-2, 2)])
-        ['1011100101101111', '0001011001011001', '1011110110101111']
-
-        >> initialize_population(3, 8, [(-2, 2)])
-        ['10110000', '00011011', '01101100']
+        >> initialize_population(3, [8, 3], [(-2, 2), (-2, 2)])
+        ['10000101101', '11100111011', '01010010001']
     """
     population = []
     for _ in range(pop_size):
         individual = "".join(
             binary_encode(
-                random.uniform(var_min, var_max), var_min, var_max, num_bits
-            ) for var_min, var_max in variable_ranges
+                random.uniform(var_min, var_max), var_min, var_max, bits
+            ) for (var_min, var_max), bits in zip(variable_ranges, num_bits)
         )
         population.append(individual)
     return population
@@ -112,20 +109,22 @@ def decode_individual(individual, variable_ranges, num_bits):
 
     参数:
         individual (str): 个体的二进制字符串。
-        variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。需要几个变量就有几个范围。
-        num_bits (int): 每个变量的二进制位数。
+        variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。
+        num_bits (list of int): 每个变量的二进制位数。
 
     返回:
         list of float: 解码后的实数列表。
 
     示例:
-        >> decode_individual('1010101010101010', [(-2, 2), (-2, 2)], 8)
-        [0.0, 1.25]
+        >> decode_individual('11001101100', [(-2, 2), (-2, 2)], [8, 3])
+        [1.215686274509804, 0.2857142857142856]
     """
     decoded = []
-    for i, (var_min, var_max) in enumerate(variable_ranges):
-        bin_str = individual[i * num_bits: (i + 1) * num_bits]
-        decoded.append(binary_decode(bin_str, var_min, var_max, num_bits))
+    start_index = 0
+    for (var_min, var_max), bits in zip(variable_ranges, num_bits):
+        bin_str = individual[start_index: start_index + bits]
+        decoded.append(binary_decode(bin_str, var_min, var_max, bits))
+        start_index += bits
     return decoded
 
 
@@ -136,15 +135,15 @@ def calculate_objectives(individual, funcs, variable_ranges, num_bits):
     参数:
         individual (str): 个体的二进制字符串。
         funcs (list of functions): 目标函数列表。
-        variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。需要几个变量就有几个范围。
-        num_bits (int): 每个变量的二进制位数。
+        variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。
+        num_bits (list of int): 每个变量的二进制位数。
 
     返回:
         list of float: 个体的目标函数值列表。
 
     示例:
-        >> calculate_objectives('1010101010101010', [f1, f2], [(-2, 2), (-2, 2)], 8)
-        [1.25, 0.75]
+        >> calculate_objectives('1010101010101010', [f1, f2], [(-2, 2), (-2, 2)], [8, 8])
+        [1.0, 0.5]
     """
     decoded_vars = decode_individual(individual, variable_ranges, num_bits)
     return [func(*decoded_vars) for func in funcs]
