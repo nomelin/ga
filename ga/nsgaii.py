@@ -22,7 +22,7 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     """
     # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
-    visualizer.reCalculate(current_funcs)
+    # visualizer.reCalculate(current_funcs)
 
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]

@@ -26,8 +26,6 @@ def binary_encode(value, var_min, var_max, num_bits):
     """
     scale = (value - var_min) / (var_max - var_min)
     int_value = int(scale * (2 ** num_bits - 1))
-    bin_str = np.binary_repr(int_value, width=num_bits)
-    print(f"binary_encode: value={value}, scale={scale}, int_value={int_value}, bin_str={bin_str},num_bits={num_bits}")
     return np.binary_repr(int_value, width=num_bits)
 
 
