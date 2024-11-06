@@ -8,7 +8,7 @@ ObjectiveVisualizer类用于可视化目标函数的解空间。
 
 
 class ObjectiveVisualizer:
-    def __init__(self, funcs, variable_ranges, resolution, show_pareto=False, objectives=None, figsize=(10, 10)):
+    def __init__(self, funcs, variable_ranges, resolution=500, show_pareto=False, objectives=None, figsize=(10, 10)):
         """
         初始化可视化工具，计算目标函数值并生成网格。
 
