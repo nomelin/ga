@@ -3,7 +3,7 @@ from PIL import Image
 
 
 class GIFGenerator:
-    def __init__(self, filename='animation.gif', fps=10):
+    def __init__(self, filename='animation.gif', fps=5):
         """
         初始化GIF生成器。
 
@@ -35,7 +35,7 @@ class GIFGenerator:
         if self.frames:
             print(f"[GIF] 开始保存动画，总帧数 {len(self.frames)}")
             self.frames[0].save(
-                self.filename, save_all=True, append_images=self.frames[1:], duration=1000 / self.fps, loop=0
+                'save/' + self.filename, save_all=True, append_images=self.frames[1:], duration=1000 / self.fps, loop=0
             )
             print(f"[GIF] 动画已保存为 {self.filename}")
         else:

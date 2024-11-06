@@ -2,13 +2,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 
+from lib.tool import GIFGenerator
+
 """
 ObjectiveVisualizer类用于可视化目标函数的解空间。
 """
 
 
 class ObjectiveVisualizer:
-    def __init__(self, funcs, variable_ranges, resolution=500, show_pareto=False, objectives=None, figsize=(8, 8)):
+    def __init__(self, funcs, variable_ranges, resolution=500, show_pareto=False, objectives=None, figsize=(8, 8),
+                 visual_mode=1, save_gif=False, gif_name='default'):
         """
         初始化可视化工具，计算目标函数值并生成网格。
 
@@ -32,6 +35,10 @@ class ObjectiveVisualizer:
         self.F1, self.F2 = self.calculate_objective_values(funcs, self.grids)
         print("[ObjectiveVisualizer]目标函数值计算完成")
         self.pareto_points = None
+        if save_gif:
+            self.gif_generator = GIFGenerator(gif_name + ".gif")
+        self.visual_mode = visual_mode
+        self.save_gif = save_gif
 
         if show_pareto and objectives:
             print("[ObjectiveVisualizer]准备计算Pareto前沿")
@@ -86,7 +93,7 @@ class ObjectiveVisualizer:
         plt.draw()  # 更新当前figure
         print("[ObjectiveVisualizer]重绘目标函数解空间")
 
-    def draw_individuals(self, individuals, generation, pause_time=0.2, visual_mode=1, save_gif=False):
+    def draw_individuals(self, individuals, generation, pause_time=0.2):
         """
         显示种群的个体点，不按rank。
                 参数：
@@ -103,8 +110,10 @@ class ObjectiveVisualizer:
         plt.scatter(f1_values, f2_values, color='green', alpha=0.6, label=f'第{generation + 1}代种群个体')
         plt.legend()
         plt.pause(pause_time)
+        if self.save_gif:
+            self.gif_generator.add_frame(self.fig)
 
-    def draw_individuals_by_rank(self, individuals, generation, pause_time=0.2, visual_mode=1, save_gif=False):
+    def draw_individuals_by_rank(self, individuals, generation, pause_time=0.2):
         """
         按照rank显示种群的个体点
                 参数：
@@ -130,8 +139,10 @@ class ObjectiveVisualizer:
 
         plt.legend()
         plt.pause(pause_time)
+        if self.save_gif:
+            self.gif_generator.add_frame(self.fig)
 
-    def draw_populations(self, individuals, generation, pause_time=0.2, visual_mode=1, save_gif=False):
+    def draw_populations(self, individuals, generation, pause_time=0.2):
         """
         显示种群的个体点,不按rank。
                 参数：
@@ -148,9 +159,11 @@ class ObjectiveVisualizer:
         plt.scatter(f1_values, f2_values, color='green', alpha=0.6, label=f'第{generation + 1}代种群个体')
         plt.legend()
         plt.pause(pause_time)
+        if self.save_gif:
+            self.gif_generator.add_frame(self.fig)
 
-    def draw_populations_by_rank(self, individuals, generation, ranks, max_rank, pause_time=0.2, visual_mode=1,
-                                 save_gif=False):
+    def draw_populations_by_rank(self, individuals, generation, ranks, max_rank, pause_time=0.2
+                                 ):
         """
         按照rank显示种群的个体点
                 参数：
@@ -165,3 +178,16 @@ class ObjectiveVisualizer:
         self.draw(generation)  # 绘制解空间
         print("未实现")  # TODO
         pass
+
+    def save(self):
+        """
+        保存gif文件
+        """
+        if self.save_gif:
+            self.gif_generator.save_gif()
+
+    def close(self):
+        """
+        关闭figure
+        """
+        plt.close(self.fig)
