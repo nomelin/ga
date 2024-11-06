@@ -8,7 +8,7 @@ ObjectiveVisualizer类用于可视化目标函数的解空间。
 
 
 class ObjectiveVisualizer:
-    def __init__(self, funcs, variable_ranges, resolution=500, show_pareto=False, objectives=None, figsize=(10, 10)):
+    def __init__(self, funcs, variable_ranges, resolution=500, show_pareto=False, objectives=None, figsize=(8, 8)):
         """
         初始化可视化工具，计算目标函数值并生成网格。
 
@@ -59,8 +59,8 @@ class ObjectiveVisualizer:
         comp_f2 = (lambda a, b: a <= b) if objectives['f2'] == 'min' else (lambda a, b: a >= b)
         strict_comp_f1 = (lambda a, b: a < b) if objectives['f1'] == 'min' else (lambda a, b: a > b)
         strict_comp_f2 = (lambda a, b: a < b) if objectives['f2'] == 'min' else (lambda a, b: a > b)
-
-        for point in points:
+        for i, point in enumerate(points):
+            print(f"\r正在计算第{i + 1}/{len(points)}个点是否为Pareto最优点", end='')
             dominated = False
             for other in points:
                 if comp_f1(other[0], point[0]) and comp_f2(other[1], point[1]) and \

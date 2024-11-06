@@ -14,19 +14,18 @@ def f2(x1, x2):
 # 设置参数
 variable_ranges = [(-2, 2), (-2, 2)]  # x1 和 x2 的取值范围
 precision = 0.01  # 期望的搜索精度
-pop_size = 100  # 种群大小
-num_generations = 10  # 迭代次数
+pop_size = 10  # 种群大小
+num_generations = 5  # 迭代次数
 
 # 初始化可视化工具
 visualizer = ObjectiveVisualizer(
     funcs=[f1, f2],
     variable_ranges=variable_ranges,
     resolution=500,
-    # show_pareto=True,
-    # objectives={'f1': 'min', 'f2': 'max'}
+    show_pareto=True,
+    objectives={'f1': 'min', 'f2': 'max'}
 )
 
-# 运行 NSGA-II 算法
 population = nsga2(
     funcs=[f1, f2],
     variable_ranges=variable_ranges,
@@ -34,6 +33,20 @@ population = nsga2(
     pop_size=pop_size,
     num_generations=num_generations,
     visualizer=visualizer
+)
+
+visualizer2 = ObjectiveVisualizer(
+    funcs=[f1, f2],
+    variable_ranges=variable_ranges,
+)
+
+nsga2(
+    funcs=[f1, f2],
+    variable_ranges=variable_ranges,
+    precision=precision,
+    pop_size=pop_size,
+    num_generations=num_generations,
+    visualizer=visualizer2
 )
 
 objective_values = [[f1(x1, x2), f2(x1, x2)] for x1, x2 in population]

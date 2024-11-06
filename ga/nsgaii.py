@@ -151,7 +151,7 @@ def crowding_distance_sort(fronts):
         fronts (list): 每个 rank 的解列表。[[]]
 
     返回:
-        list: 拥挤度排序后的解。
+        list[list]: 拥挤度排序后的解。
     """
     sorted_fronts = []
     for front in fronts:
