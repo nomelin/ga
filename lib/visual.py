@@ -10,13 +10,13 @@ ObjectiveVisualizer类用于可视化目标函数的解空间。
 
 
 class ObjectiveVisualizer:
-    def __init__(self, funcs, variable_ranges, resolution=500, show_pareto=False, objectives=None, figsize=(8, 8),
+    def __init__(self, variable_ranges, funcs=None, resolution=500, show_pareto=False, objectives=None, figsize=(8, 8),
                  visual_mode=1, save_gif=False, gif_name='default'):
         """
         初始化可视化工具，计算目标函数值并生成网格。
 
         参数:
-            funcs (list): 包含两个目标函数的列表，每个函数应接受相同数量的自变量，返回标量目标值。
+            funcs (list)（如果这里没传，则需要在外部调用reCalculate函数）: 包含两个目标函数的列表，每个函数应接受相同数量的自变量，返回标量目标值。
             variable_ranges (list of tuples): 每个自变量的取值范围列表，格式为 [(x1_min, x1_max), (x2_min, x2_max)]。
             resolution (int): 采样分辨率，表示在每个自变量的范围内采样的点数。
             show_pareto (bool): 是否显示Pareto最优边界，默认为False。
@@ -26,28 +26,35 @@ class ObjectiveVisualizer:
         功能:
             初始化时计算目标函数值和Pareto前沿，并保存这些数据以供后续使用。
         """
-        self.funcs = funcs
         self.variable_ranges = variable_ranges
         self.resolution = resolution
         self.show_pareto = show_pareto
         self.objectives = objectives
         self.grids = self.generate_grid(variable_ranges, resolution)
-        print("[ObjectiveVisualizer]准备计算目标函数值")
-        self.F1, self.F2 = self.calculate_objective_values(funcs, self.grids)
-        print("[ObjectiveVisualizer]目标函数值计算完成")
+        if funcs is not None:
+            self.reCalculate(funcs)
         self.pareto_points = None
         if save_gif:
             self.gif_generator = GIFGenerator(gif_name + ".gif")
         self.visual_mode = visual_mode
         self.save_gif = save_gif
 
-        if show_pareto and objectives:
+        if show_pareto and objectives and funcs is not None:
             print("[ObjectiveVisualizer]准备计算Pareto前沿")
             self.pareto_points = self.pareto_front(self.F1, self.F2, objectives)
             print("[ObjectiveVisualizer]Pareto前沿点数：", len(self.pareto_points))
 
         # 初始化figure和axes
         self.fig, self.ax = plt.subplots(figsize=figsize)
+
+    def reCalculate(self, funcs):
+        """
+        重新计算目标函数值，并保存这些数据以供后续使用。
+        """
+        self.funcs = funcs
+        print("[ObjectiveVisualizer]准备计算目标函数值")
+        self.F1, self.F2 = self.calculate_objective_values(funcs, self.grids)
+        print("[ObjectiveVisualizer]目标函数值计算完成")
 
     def generate_grid(self, variable_ranges, resolution):
         # 根据分辨率生成网格

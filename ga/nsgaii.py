@@ -22,6 +22,7 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     """
     # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
+    visualizer.reCalculate(current_funcs)
 
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
@@ -41,7 +42,10 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         # 检查是否需要更换目标函数
         if generation in funcs_dict:
             current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
-            print(f"[nsga-ii]更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
+            print(
+                f"[nsga-ii]更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
+            visualizer.reCalculate(current_funcs)
+            print(f"[nsga-ii]刷新解空间")
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
