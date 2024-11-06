@@ -21,6 +21,7 @@ class ObjectiveVisualizer:
             resolution (int): 采样分辨率，表示在每个自变量的范围内采样的点数。
             show_pareto (bool): 是否显示Pareto最优边界，默认为False。
             objectives (dict): 目标优化方向配置字典，例如 {'f1': 'min', 'f2': 'max'}。
+            visual_mode 1:使用matplotlib;
 
         功能:
             初始化时计算目标函数值和Pareto前沿，并保存这些数据以供后续使用。
@@ -83,15 +84,18 @@ class ObjectiveVisualizer:
         """
         显示图像，不重新计算目标函数值
         """
-        self.ax.scatter(self.F1, self.F2, s=10, c='lightgray', label='解')
-        if self.pareto_points is not None:
-            self.ax.scatter(self.pareto_points[:, 0], self.pareto_points[:, 1], c='#a94826', label='最优边界')
-        self.ax.set_xlabel('f1')
-        self.ax.set_ylabel('f2')
-        self.ax.set_title(f'目标函数解空间 (第{generation + 1}代)')
-        self.ax.legend()
-        plt.draw()  # 更新当前figure
-        print("[ObjectiveVisualizer]重绘目标函数解空间")
+        if self.visual_mode == 1:
+            self.ax.scatter(self.F1, self.F2, s=10, c='lightgray', label='解')
+            if self.pareto_points is not None:
+                self.ax.scatter(self.pareto_points[:, 0], self.pareto_points[:, 1], c='#a94826', label='最优边界')
+            self.ax.set_xlabel('f1')
+            self.ax.set_ylabel('f2')
+            self.ax.set_title(f'目标函数解空间 (第{generation + 1}代)')
+            self.ax.legend()
+            plt.draw()
+            print("[ObjectiveVisualizer]重绘目标函数解空间")
+        elif self.visual_mode == 2:
+            pass
 
     def draw_individuals(self, individuals, generation, pause_time=0.2):
         """
@@ -124,23 +128,28 @@ class ObjectiveVisualizer:
         if len(individuals[0][0].objectives) != 2:
             print("[ObjectiveVisualizer]画图只支持 2 目标优化问题")
             return
-        self.ax.clear()  # 清除当前内容而不重新创建figure
-        self.draw(generation)  # 绘制解空间
-        num_ranks = len(individuals)  # 计算rank数量
-        colors = cm.get_cmap("plasma", num_ranks)
+        if self.visual_mode == 1:
+            self.ax.clear()  # 清除当前内容而不重新创建figure
+            self.draw(generation)  # 绘制解空间
+            num_ranks = len(individuals)  # 计算rank数量
+            colors = cm.get_cmap("plasma", num_ranks)
 
-        for rank, group in enumerate(individuals):
-            f1_values = [ind.objectives[0] for ind in group]
-            f2_values = [ind.objectives[1] for ind in group]
+            for rank, group in enumerate(individuals):
+                f1_values = [ind.objectives[0] for ind in group]
+                f2_values = [ind.objectives[1] for ind in group]
 
-            # 获取颜色映射，rank越小颜色越深
-            rank_color = colors(rank / (num_ranks - 1))  # 归一化rank用于颜色映射
-            plt.scatter(f1_values, f2_values, color=rank_color, alpha=0.8, label=f'rank:{rank}')
+                # 获取颜色映射，rank越小颜色越深
+                rank_color = colors(rank / (num_ranks - 1))  # 归一化rank用于颜色映射
+                plt.scatter(f1_values, f2_values, color=rank_color, alpha=0.8, label=f'rank:{rank}')
 
-        plt.legend()
-        plt.pause(pause_time)
-        if self.save_gif:
-            self.gif_generator.add_frame(self.fig)
+            plt.legend()
+            plt.pause(pause_time)
+            if self.save_gif:
+                self.gif_generator.add_frame(self.fig)
+        elif self.visual_mode == 2:
+            print("未实现")
+        else:
+            print("未实现")
 
     def draw_populations(self, individuals, generation, pause_time=0.2):
         """
