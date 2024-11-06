@@ -1,23 +1,4 @@
-from matplotlib import pyplot as plt
-
 from lib.ga_basic import *
-
-
-# ======================
-# 参数配置
-# ======================
-# 函数
-def f1(x1, x2):
-    return x1 ** 2 + x2 ** 2
-
-
-def f2(x1, x2):
-    return (x1 - 2) ** 2 + x2 ** 2
-
-
-# 自变量范围和取值分辨率
-variable_ranges = [(-2, 2), (-2, 2)]
-resolution = 500  # 离散的取值数量
 
 
 # ======================
@@ -59,7 +40,10 @@ def nsga2(visualizer, funcs, variable_ranges, precision, pop_size=100, num_gener
         # 拥挤度排序
         sorted_population = crowding_distance_sort(fronts)
         # 画点
-        draw_population(visualizer, combined_population, generation)
+        visualizer.draw_individuals_by_rank(sorted_population, generation)
+
+        # 展平种群
+        sorted_population = [ind for front in sorted_population for ind in front]
 
         # 精英保留策略，从排序后的种群中选择 N 个个体，形成新的父代种群
         population = sorted_population[:pop_size]
@@ -73,22 +57,8 @@ def nsga2(visualizer, funcs, variable_ranges, precision, pop_size=100, num_gener
 
 
 # ======================
-# 抽象函数定义
+#
 # ======================
-
-def draw_population(visualizer, individuals, generation):
-    if len(individuals[0].objectives) != 2:
-        print("画图只支持 2 目标优化问题")
-        return
-    visualizer.draw()  # 绘制解空间
-    f1_values = [ind.objectives[0] for ind in individuals]
-    f2_values = [ind.objectives[1] for ind in individuals]
-    # 在同一个figure上绘制个体点，使用绿色
-    # TODO rank 颜色映射
-    plt.scatter(f1_values, f2_values, color='green', alpha=0.6, label=f'第{generation + 1}代种群个体')
-    plt.legend()
-
-    plt.pause(0.2)
 
 
 def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits):
@@ -200,8 +170,6 @@ def crowding_distance_sort(fronts):
             ind.crowding_distance = distances[i]  # 将拥挤度赋值给个体
 
         sorted_fronts.append(sorted(front, key=lambda x: (-x.rank, -x.crowding_distance)))
-    # 展平种群
-    sorted_fronts = [ind for front in sorted_fronts for ind in front]
     print(f"拥挤度排序后的种群: {sorted_fronts}")
     return sorted_fronts
 
