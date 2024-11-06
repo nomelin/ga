@@ -11,6 +11,10 @@ def f2(x1, x2):
     return (x1 - 1) ** 2 + x2 ** 2
 
 
+def f3(x1, x2):
+    return (x1 + 1) ** 2 + x2
+
+
 # 设置参数
 variable_ranges = [(-2, 2), (-2, 2)]  # x1 和 x2 的取值范围
 precision = 0.01  # 期望的搜索精度
@@ -19,7 +23,6 @@ num_generations = 15  # 迭代次数
 
 # 初始化可视化工具
 visualizer = ObjectiveVisualizer(
-    funcs=[f1, f2],
     variable_ranges=variable_ranges,
     # resolution=500,
     # show_pareto=True,
@@ -29,7 +32,7 @@ visualizer = ObjectiveVisualizer(
 )
 
 population = nsga2(
-    funcs_dict={0: [[f1, f2], ['min', 'min']], 6: [[f1, f2], ['min', 'max']]},
+    funcs_dict={0: [[f1, f3], ['min', 'min']], 6: [[f1, f2], ['min', 'max']]},
     variable_ranges=variable_ranges,
     precision=precision,
     pop_size=pop_size,
