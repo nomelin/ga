@@ -1,9 +1,6 @@
 from lib.ga_basic import *
 
 
-# ======================
-# NSGA-II 主过程
-# ======================
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
           mutation_rate=0.01):
     """
@@ -193,6 +190,7 @@ def crowding_distance_sort(fronts):
             ind.crowding_distance = distances[i]  # 将拥挤度赋值给个体
 
         sorted_fronts.append(sorted(front, key=lambda x: (-x.rank, -x.crowding_distance)))
+    print("拥挤度排序完成")
     # print(f"拥挤度排序后的种群: {sorted_fronts}")
     return sorted_fronts
 

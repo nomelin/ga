@@ -1,3 +1,4 @@
+from funcs import POL
 from ga.nsgaii import nsga2
 from lib.visual import ObjectiveVisualizer
 
@@ -17,29 +18,27 @@ def f3(x1, x2):
 
 # 设置参数
 variable_ranges = [(-2, 2), (-2, 2)]  # x1 和 x2 的取值范围
-precision = 0.01  # 期望的搜索精度
-pop_size = 50  # 种群大小
-num_generations = 15  # 迭代次数
 
 # 初始化可视化工具
 visualizer = ObjectiveVisualizer(
-    variable_ranges=variable_ranges,
+    variable_ranges=POL.variable_ranges,
     # resolution=500,
     # show_pareto=True,
     # objectives={'f1': 'min', 'f2': 'min'}
     save_gif=True,  # 保存动画
-    gif_name='nsga2-test'
+    gif_name='nsga2-POL-140',
+    figsize=(12, 12)
 )
 
 population = nsga2(
-    funcs_dict={0: [[f1, f3], ['min', 'min']], 6: [[f1, f2], ['min', 'max']]},
-    variable_ranges=variable_ranges,
-    precision=precision,
-    pop_size=pop_size,
-    num_generations=num_generations,
+    funcs_dict={0: [POL.funcs, ['min', 'min']], 10: [POL.funcs, ['min', 'max']], 20: [POL.funcs, ['max', 'max']]},
+    variable_ranges=POL.variable_ranges,
+    precision=0.01,
+    pop_size=140,
+    num_generations=30,
     visualizer=visualizer,
     crossover_rate=0.9,
-    mutation_rate=0.2
+    mutation_rate=0.1
 )
 
 visualizer.save()  # 保存动画
