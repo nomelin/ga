@@ -1,5 +1,5 @@
 import numpy as np
-
+from scipy.spatial import cKDTree
 
 class ConvergenceMetricCalculator:
     def __init__(self, optimal_set, obtained_optimal_set, H):
@@ -20,9 +20,6 @@ class ConvergenceMetricCalculator:
         """
         生成一个均匀间隔的理论最优解集。
 
-        这个解集用于与实际获得的最优解集进行比较，以评估优化算法的性能。
-        解集中的每个点的 x1 坐标固定为 1，x2 坐标在 -2 到 2 之间均匀分布。
-
         返回:
         numpy.ndarray: 均匀间隔的理论最优解集。
         """
@@ -39,17 +36,12 @@ class ConvergenceMetricCalculator:
         """
         计算实际获得的最优解集与均匀间隔的理论最优解集之间的最小欧几里得距离。
 
-        参数:
-        uniform_actual_optimum_set (numpy.ndarray): 均匀间隔的理论最优解集。
-
         返回:
         numpy.ndarray: 实际解集中每个点到理论解集的最小距离。
         """
-        # 计算实际解集中每个点到理论解集的欧几里得距离
-        distances = np.sqrt(
-            np.sum((self.obtained_optimal_set[:, np.newaxis, :] - uniform_actual_optimum_set) ** 2, axis=2))
-        # 找到每个实际解到理论解集的最小距离
-        min_distances = np.min(distances, axis=0)
+        # 使用 KDTree 计算最小欧几里得距离
+        tree = cKDTree(uniform_actual_optimum_set)
+        min_distances, _ = tree.query(self.obtained_optimal_set)
         return min_distances
 
     def calculate_convergence_metric(self):

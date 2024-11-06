@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import cm
 
 """
 ObjectiveVisualizer类用于可视化目标函数的解空间。
@@ -71,15 +72,96 @@ class ObjectiveVisualizer:
 
         return np.array(pareto_points)
 
-    def draw(self):
-        """ 显示图像，不重新计算目标函数值 """
-        self.ax.clear()  # 清除当前内容而不重新创建figure
+    def draw(self, generation):
+        """
+        显示图像，不重新计算目标函数值
+        """
         self.ax.scatter(self.F1, self.F2, s=10, c='lightgray', label='解')
         if self.pareto_points is not None:
             self.ax.scatter(self.pareto_points[:, 0], self.pareto_points[:, 1], c='#a94826', label='最优边界')
         self.ax.set_xlabel('f1')
         self.ax.set_ylabel('f2')
-        self.ax.set_title('目标函数解空间')
+        self.ax.set_title(f'目标函数解空间 (第{generation + 1}代)')
         self.ax.legend()
         plt.draw()  # 更新当前figure
         print("[ObjectiveVisualizer]重绘目标函数解空间")
+
+    def draw_individuals(self, individuals, generation, pause_time=0.2, visual_mode=1, save_gif=False):
+        """
+        显示种群的个体点，不按rank。
+                参数：
+                    individuals (list): 种群对象个体列表，需要有objectives属性，格式为 [f1, f2]。
+                    generation (int): 当前代数
+        """
+        if len(individuals[0].objectives) != 2:
+            print("[ObjectiveVisualizer]画图只支持 2 目标优化问题")
+            return
+        self.ax.clear()  # 清除当前内容而不重新创建figure
+        self.draw(generation)  # 绘制解空间
+        f1_values = [ind.objectives[0] for ind in individuals]
+        f2_values = [ind.objectives[1] for ind in individuals]
+        plt.scatter(f1_values, f2_values, color='green', alpha=0.6, label=f'第{generation + 1}代种群个体')
+        plt.legend()
+        plt.pause(pause_time)
+
+    def draw_individuals_by_rank(self, individuals, generation, pause_time=0.2, visual_mode=1, save_gif=False):
+        """
+        按照rank显示种群的个体点
+                参数：
+                    individuals (list[list]): 种群对象个体按rank分组列表，需要有objectives属性，属性格式为 [f1, f2]。
+                    分组代表rank，格式为 [ [ind1, ind2], [ind3, ind4],... ]。靠前的rank代表更优秀的个体。
+                    generation (int): 当前代数
+        """
+        if len(individuals[0][0].objectives) != 2:
+            print("[ObjectiveVisualizer]画图只支持 2 目标优化问题")
+            return
+        self.ax.clear()  # 清除当前内容而不重新创建figure
+        self.draw(generation)  # 绘制解空间
+        num_ranks = len(individuals)  # 计算rank数量
+        colors = cm.get_cmap("plasma", num_ranks)
+
+        for rank, group in enumerate(individuals):
+            f1_values = [ind.objectives[0] for ind in group]
+            f2_values = [ind.objectives[1] for ind in group]
+
+            # 获取颜色映射，rank越小颜色越深
+            rank_color = colors(rank / (num_ranks - 1))  # 归一化rank用于颜色映射
+            plt.scatter(f1_values, f2_values, color=rank_color, alpha=0.8, label=f'rank:{rank}')
+
+        plt.legend()
+        plt.pause(pause_time)
+
+    def draw_populations(self, individuals, generation, pause_time=0.2, visual_mode=1, save_gif=False):
+        """
+        显示种群的个体点,不按rank。
+                参数：
+                    individuals (list): 种群个体坐标列表，格式为元组 (f1, f2)，代表点的坐标
+                    generation (int): 当前代数
+        """
+        if len(individuals[0]) != 2:
+            print("[ObjectiveVisualizer]画图只支持 2 目标优化问题")
+            return
+        self.ax.clear()  # 清除当前内容而不重新创建figure
+        self.draw(generation)  # 绘制解空间
+        f1_values = [ind[0] for ind in individuals]
+        f2_values = [ind[1] for ind in individuals]
+        plt.scatter(f1_values, f2_values, color='green', alpha=0.6, label=f'第{generation + 1}代种群个体')
+        plt.legend()
+        plt.pause(pause_time)
+
+    def draw_populations_by_rank(self, individuals, generation, ranks, max_rank, pause_time=0.2, visual_mode=1,
+                                 save_gif=False):
+        """
+        按照rank显示种群的个体点
+                参数：
+                    individuals (list[list]): 种群个体坐标按rank分组列表，格式为元组 (f1, f2)，代表点的坐标。
+                    分组代表rank，格式为 [ [ind1, ind2], [ind3, ind4],... ]。靠前的rank代表更优秀的个体。
+                    generation (int): 当前代数
+        """
+        if len(individuals[0][0]) != 2:
+            print("[ObjectiveVisualizer]画图只支持 2 目标优化问题")
+            return
+        self.ax.clear()  # 清除当前内容而不重新创建figure
+        self.draw(generation)  # 绘制解空间
+        print("未实现")  # TODO
+        pass
