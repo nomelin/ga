@@ -120,9 +120,19 @@ def update_archive(population, archive, strength, crowding_distance):
     archive[:] = sorted_population[:archive_size]  # 保持存档大小不变
 
 
+# 生成理论帕累托最优解集
+def generate_theoretical_pareto_front():
+    # 对于 f1 和 f2，理论帕累托前沿是 x1 = 1 的线
+    x2_values = np.linspace(-2, 2, 500)
+    theoretical_front = np.array([[np.ones(x2_values.shape), x2_values]])
+    return theoretical_front
 # 运行算法并输出结果
+optimal_front = generate_theoretical_pareto_front()
 final_archive = spea_algorithm()
 print(final_archive)
 caculator1 = DiversityMetricCalculator(final_archive)
+caculator2 = ConvergenceMetricCalculator(optimal_front,final_archive,500)
 metric1 = caculator1.get_diversity_metric()
+metric2 = caculator2.calculate_convergence_metric()
 print(metric1)
+print(metric2)
