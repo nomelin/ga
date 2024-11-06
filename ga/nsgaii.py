@@ -4,12 +4,14 @@ from lib.ga_basic import *
 # ======================
 # NSGA-II 主过程
 # ======================
-def nsga2(visualizer, funcs, variable_ranges, precision, pop_size=100, num_generations=50):
+def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
+          mutation_rate=0.01):
     """
-    NSGA-II 算法主过程。
+    NSGA-II 算法主过程，支持动态目标函数。
 
     参数:
-        funcs (list): 目标函数列表。
+        funcs_dict (dict): 轮次 -> 目标函数列表及其方向。
+                           例如 {0: [[f1, f2], ['min', 'min']], 10: [[f3, f4], ['max', 'min']]}。随时间变化的目标函数列表。
         variable_ranges (list of tuples): 每个变量的取值范围。
         precision (float): 期望的搜索精度，用于确定编码长度。
         pop_size (int): 种群大小，默认值为 100。
@@ -18,27 +20,38 @@ def nsga2(visualizer, funcs, variable_ranges, precision, pop_size=100, num_gener
     返回:
         list: 最终种群的解（经过解码）。
     """
+    # 初始设定目标函数和方向
+    current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
+
     # 生成初始种群并进行快速非支配排序
-    num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]  # 计算每个变量的二进制位数
+    num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
+
     # 非支配排序
-    fronts = fast_non_dominated_sort(population, funcs, variable_ranges, num_bits)
+    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions)
     # 展平种群
     fronts = [ind for front in fronts for ind in front]
-    # 使用锦标赛选择,交叉和变异生成子代种群
-    offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits)
+    # 使用选择、交叉和变异生成子代种群
+    offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
     # 迭代进化过程
     for generation in range(num_generations):
-        print(f"[nsga-ii]第 {generation + 1} 代")
+        print(f"[nsga-ii] 第 {generation + 1} 代")
+
+        # 检查是否需要更换目标函数
+        if generation in funcs_dict:
+            current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
+            print(f"[nsga-ii]更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
         # 非支配排序
-        fronts = fast_non_dominated_sort(combined_population, funcs, variable_ranges, num_bits)
+        fronts = fast_non_dominated_sort(combined_population, current_funcs, variable_ranges, num_bits,
+                                         current_directions)
         # 拥挤度排序
         sorted_population = crowding_distance_sort(fronts)
+
         # 画点
         visualizer.draw_individuals_by_rank(sorted_population, generation)
 
@@ -49,7 +62,7 @@ def nsga2(visualizer, funcs, variable_ranges, precision, pop_size=100, num_gener
         population = sorted_population[:pop_size]
 
         # 使用选择、交叉、变异生成新一代子代种群
-        offspring = create_offspring(population, variable_ranges, pop_size, num_bits)
+        offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
@@ -57,32 +70,30 @@ def nsga2(visualizer, funcs, variable_ranges, precision, pop_size=100, num_gener
 
 
 # ======================
-#
-# ======================
 
-
-def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits):
+def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions):
     """
-    快速非支配排序。
+    快速非支配排序，支持每个目标函数的优化方向。
 
     参数:
         population (list): 当前种群。
         funcs (list): 目标函数列表。
         variable_ranges (list of tuples): 每个变量的取值范围。
         num_bits (list of int): 每个变量的二进制位数。
+        directions (list of str): 每个目标的优化方向，'min' 或 'max'。
 
     返回:
-        list: 每个 rank 的解，嵌套 list。
+        list[list]: 每个 rank 的解，嵌套 list。
     """
-    print(f"待非支配排序种群: {population}")
+    # print(f"待非支配排序种群: {population}")
     ranks = [[]]
     for i, ind1 in enumerate(population):
         S = []
         n = 0
         for j, ind2 in enumerate(population):
-            if dominates(ind1, ind2, funcs, variable_ranges, num_bits):
+            if dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
                 S.append(j)
-            elif dominates(ind2, ind1, funcs, variable_ranges, num_bits):
+            elif dominates(ind2, ind1, funcs, variable_ranges, num_bits, directions):
                 n += 1
         if n == 0:
             ranks[0].append(i)
@@ -109,13 +120,13 @@ def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits):
     for i in range(len(ranks)):
         for j in range(len(ranks[i])):
             ranks[i][j] = population[ranks[i][j]]
-    print(f"非支配排序后的种群: {ranks}")
+    # print(f"非支配排序后的种群: {ranks}")
     return ranks
 
 
-def dominates(ind1, ind2, funcs, variable_ranges, num_bits):
+def dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
     """
-    判断个体 ind1 是否支配个体 ind2。
+    判断个体 ind1 是否支配个体 ind2，支持每个目标函数的优化方向。
 
     参数:
         ind1 (str): 第一个个体的二进制字符串。
@@ -123,6 +134,7 @@ def dominates(ind1, ind2, funcs, variable_ranges, num_bits):
         funcs (list of functions): 目标函数列表。
         variable_ranges (list of tuples): 每个变量的取值范围。
         num_bits (int): 每个变量的二进制位数。
+        directions (list of str): 每个目标的优化方向，'min' 或 'max'。
 
     返回:
         bool: 如果 ind1 支配 ind2，则返回 True；否则返回 False。
@@ -133,12 +145,19 @@ def dominates(ind1, ind2, funcs, variable_ranges, num_bits):
     better_in_all_objectives = True  # 在所有目标函数上都有更好的
     strictly_better_in_at_least_one = False  # 在至少一个目标函数上有严格的更好
 
-    for val1, val2 in zip(obj_values1, obj_values2):
-        if val1 > val2:  # Assuming minimization objectives
-            better_in_all_objectives = False  # 至少有一个目标函数上没有更好
-            break
-        elif val1 < val2:
-            strictly_better_in_at_least_one = True  # 至少有一个目标函数上有严格的更好
+    for val1, val2, direction in zip(obj_values1, obj_values2, directions):
+        if direction == 'min':
+            if val1 > val2:
+                better_in_all_objectives = False  # 至少有一个目标函数上没有更好
+                break
+            elif val1 < val2:
+                strictly_better_in_at_least_one = True  # 至少有一个目标函数上有严格的更好
+        elif direction == 'max':
+            if val1 < val2:
+                better_in_all_objectives = False
+                break
+            elif val1 > val2:
+                strictly_better_in_at_least_one = True
 
     return better_in_all_objectives and strictly_better_in_at_least_one
 
@@ -170,7 +189,7 @@ def crowding_distance_sort(fronts):
             ind.crowding_distance = distances[i]  # 将拥挤度赋值给个体
 
         sorted_fronts.append(sorted(front, key=lambda x: (-x.rank, -x.crowding_distance)))
-    print(f"拥挤度排序后的种群: {sorted_fronts}")
+    # print(f"拥挤度排序后的种群: {sorted_fronts}")
     return sorted_fronts
 
 

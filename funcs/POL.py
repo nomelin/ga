@@ -9,7 +9,7 @@ def f1(x1, x2):
     return 1 + (A1 - B1) ** 2 + (A2 - B2) ** 2
 
 
-def f2(x1,x2):
+def f2(x1, x2):
     return (x1 + 3) ** 2 + (x2 + 1) ** 2
 
 
