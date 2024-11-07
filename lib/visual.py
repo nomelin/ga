@@ -47,6 +47,19 @@ class ObjectiveVisualizer:
         # 初始化figure和axes
         self.fig, self.ax = plt.subplots(figsize=figsize)
 
+    def show_pareto_front(self):
+        """
+        显示Pareto前沿
+        """
+        if self.show_pareto and self.pareto_points is not None:
+            self.draw(-1)
+            self.ax.scatter(self.pareto_points[:, 0], self.pareto_points[:, 1], c='#a94826', label='最优边界')
+            self.ax.legend()
+            plt.draw()
+            print("[ObjectiveVisualizer]显示Pareto前沿")
+            if self.save_gif:
+                self.gif_generator.add_frame(self.fig)
+
     def reCalculate(self, funcs):
         """
         重新计算目标函数值，并保存这些数据以供后续使用。
