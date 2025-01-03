@@ -1,6 +1,7 @@
 from lib.ga_basic import *
 from sklearn.neural_network import MLPRegressor
 
+
 # ======================
 # NSGA-II 主过程
 # ======================
@@ -139,7 +140,7 @@ def differential_crossover(population, variable_ranges, F=0.5, strategy='rank'):
 # 使用历史非支配解集，通过预测模型生成部分子代。用遗传操作补充生成剩余的子代。
 # 新增——————————
 def create_offspring_with_prediction(population, variable_ranges, pop_size, num_bits, historical_fronts,
-                                      crossover_rate=0.9, mutation_rate=0.01, de_strategy='rank', F=0.5):
+                                     crossover_rate=0.9, mutation_rate=0.01, de_strategy='rank', F=0.5):
     """
     使用差分交叉算子结合预测模型生成子代种群。
 
@@ -207,10 +208,9 @@ def predict_new_solutions(recent_fronts, num_solutions, variable_ranges):
     # 使用模型预测新解
     predicted_solutions = model.predict(recent_fronts[-1])  # 最近一代预测下一代
     predicted_solutions = np.clip(predicted_solutions, [r[0] for r in variable_ranges],
-                                   [r[1] for r in variable_ranges])  # 限制在范围内
+                                  [r[1] for r in variable_ranges])  # 限制在范围内
 
     return predicted_solutions[:num_solutions]
-
 
 
 def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions):
