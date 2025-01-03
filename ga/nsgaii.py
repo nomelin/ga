@@ -2,7 +2,7 @@ from lib.ga_basic import *
 
 
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
-          mutation_rate=0.01):
+          mutation_rate=0.01, dynamic_funcs=False):
     """
     NSGA-II 算法主过程，支持动态目标函数。
 
@@ -13,6 +13,13 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         precision (float): 期望的搜索精度，用于确定编码长度。
         pop_size (int): 种群大小，默认值为 100。
         num_generations (int): 迭代次数，默认值为 50。
+        dynamic_funcs (bool): 是否使用动态目标函数，默认值为 False。
+        例如：
+        def f1(x1, x2, t): return x1 ** 2 + x2 ** 2 + a(t)*x1 + b(t)*x2
+        def a(t): return t
+        def b(t): return sin(t)
+        则这个函数就是参数随时间t变化的目标函数。
+        如果启用动态函数，则每个函数都需要在末尾包含一个参数 t，不论是否使用。
 
     返回:
         list: 最终种群的解（经过解码）。
@@ -21,12 +28,16 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
     # visualizer.reCalculate(current_funcs)
 
+    # 初始化 t 为 0
+    t = 0
+
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
 
     # 非支配排序
-    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions)
+    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions,
+                                     t)
     # 展平种群
     fronts = [ind for front in fronts for ind in front]
     # 使用选择、交叉和变异生成子代种群
@@ -36,20 +47,25 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     for generation in range(num_generations):
         print(f"[nsga-ii] 第 {generation + 1} 代")
 
-        # 检查是否需要更换目标函数
+        # 检查是否是分段边界，如果是，则需要更换目标函数
         if generation in funcs_dict:
+            t = 0  # 分段时重置 t 为 0
             current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
             print(
-                f"[nsga-ii]更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
-            visualizer.reCalculate(current_funcs)
-            print(f"[nsga-ii]刷新解空间")
+                f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
+            visualizer.reCalculate(funcs=current_funcs, t=t)
+            print(f"[nsga-ii] 刷新解空间")
+        # 如果使用动态目标函数，每代都重新计算解空间
+        if dynamic_funcs:
+            print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
+            visualizer.reCalculate(funcs=current_funcs, t=t)
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
         # 非支配排序
         fronts = fast_non_dominated_sort(combined_population, current_funcs, variable_ranges, num_bits,
-                                         current_directions)
+                                         current_directions, t)
         # 拥挤度排序
         sorted_population = crowding_distance_sort(fronts)
 
@@ -65,6 +81,9 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         # 使用选择、交叉、变异生成新一代子代种群
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
+        # 更新 t
+        t += 1
+
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
     return final_solutions
@@ -72,9 +91,9 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
 
 # ======================
 
-def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions):
+def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t):
     """
-    快速非支配排序，支持每个目标函数的优化方向。
+    快速非支配排序，支持每个目标函数的优化方向，并支持动态优化问题中的时间变量 t。
 
     参数:
         population (list): 当前种群。
@@ -82,6 +101,7 @@ def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, direct
         variable_ranges (list of tuples): 每个变量的取值范围。
         num_bits (list of int): 每个变量的二进制位数。
         directions (list of str): 每个目标的优化方向，'min' 或 'max'。
+        t (float): 时间变量，用于动态优化问题。
 
     返回:
         list[list]: 每个 rank 的解，嵌套 list。
@@ -92,9 +112,9 @@ def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, direct
         S = []
         n = 0
         for j, ind2 in enumerate(population):
-            if dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
+            if dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions, t):
                 S.append(j)
-            elif dominates(ind2, ind1, funcs, variable_ranges, num_bits, directions):
+            elif dominates(ind2, ind1, funcs, variable_ranges, num_bits, directions, t):
                 n += 1
         if n == 0:
             ranks[0].append(i)
@@ -125,9 +145,9 @@ def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, direct
     return ranks
 
 
-def dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
+def dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions, t):
     """
-    判断个体 ind1 是否支配个体 ind2，支持每个目标函数的优化方向。
+    判断个体 ind1 是否支配个体 ind2，支持每个目标函数的优化方向，并支持动态优化问题中的时间变量 t。
 
     参数:
         ind1 (str): 第一个个体的二进制字符串。
@@ -136,12 +156,13 @@ def dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
         variable_ranges (list of tuples): 每个变量的取值范围。
         num_bits (int): 每个变量的二进制位数。
         directions (list of str): 每个目标的优化方向，'min' 或 'max'。
+        t (float): 时间变量，用于动态优化问题。
 
     返回:
         bool: 如果 ind1 支配 ind2，则返回 True；否则返回 False。
     """
-    obj_values1 = adapter_calculate_objectives(ind1, funcs, variable_ranges, num_bits)
-    obj_values2 = adapter_calculate_objectives(ind2, funcs, variable_ranges, num_bits)
+    obj_values1 = adapter_calculate_objectives(ind1, funcs, variable_ranges, num_bits, t)
+    obj_values2 = adapter_calculate_objectives(ind2, funcs, variable_ranges, num_bits, t)
 
     better_in_all_objectives = True  # 在所有目标函数上都有更好的
     strictly_better_in_at_least_one = False  # 在至少一个目标函数上有严格的更好
@@ -290,8 +311,8 @@ def adapter_decode_individual(individual, variable_ranges, num_bits):
     return decoded_values
 
 
-def adapter_calculate_objectives(individual, funcs, variable_ranges, num_bits):
-    individual.objectives = calculate_objectives(individual.binary_string, funcs, variable_ranges, num_bits)
+def adapter_calculate_objectives(individual, funcs, variable_ranges, num_bits, t):
+    individual.objectives = calculate_objectives(individual.binary_string, funcs, variable_ranges, num_bits, t)
     return individual.objectives
 
 

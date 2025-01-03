@@ -1,18 +1,18 @@
-from funcs import POL
+from ga.nsgaii import nsga2
 from lib.visual import ObjectiveVisualizer
 
 
 # 定义目标函数
-def f1(x1, x2):
-    return x1 ** 2 + x2 ** 2
+def f1(x1, x2, t):
+    return x1 ** 2 + x2 ** 2 + a(t)
 
 
-def f2(x1, x2):
-    return (x1 - 2) ** 2 + x2 ** 2
+def f2(x1, x2, t):
+    return (x1 - a(t)) ** 2 + x2 ** 2
 
 
-def f3(x1, x2):
-    return (x1 + 1) ** 2 + x2
+def a(t):
+    return t+1
 
 
 # 设置参数
@@ -20,29 +20,26 @@ variable_ranges = [(-2, 2), (-2, 2)]  # x1 和 x2 的取值范围
 
 # 初始化可视化工具
 visualizer = ObjectiveVisualizer(
-    variable_ranges=POL.variable_ranges,
-    resolution=250,
-    show_pareto=True,
-    funcs=[f1, f2],
+    variable_ranges=variable_ranges,
+    resolution=100,
     objectives={'f1': 'min', 'f2': 'min'},
-    save_gif=True,  # 保存动画
-    gif_name='nsga2-POL-140',
     figsize=(12, 12)
 )
 
-# population = nsga2(
-#     funcs_dict={0: [[f1, f2], ['min', 'min']]},
-#     variable_ranges=POL.variable_ranges,
-#     precision=0.01,
-#     pop_size=100,
-#     num_generations=10,
-#     visualizer=visualizer,
-#     # crossover_rate=0.9,
-#     # mutation_rate=0.01
-# )
-visualizer.show_pareto_front()
+population = nsga2(
+    funcs_dict={0: [[f1, f2], ['min', 'min']]},
+    variable_ranges=variable_ranges,
+    precision=0.01,
+    pop_size=100,
+    num_generations=10,
+    visualizer=visualizer,
+    dynamic_funcs=True,  # 使用动态目标函数
+    # crossover_rate=0.9,
+    # mutation_rate=0.01
+)
+# visualizer.show_pareto_front()
 
-visualizer.save()  # 保存动画
+# visualizer.save()  # 保存动画
 
 # visualizer2 = ObjectiveVisualizer(
 #     funcs=[f1, f2],
