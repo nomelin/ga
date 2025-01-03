@@ -46,23 +46,54 @@ class ObjectiveVisualizer:
 
         # 初始化figure和axes
         self.fig, self.ax = plt.subplots(figsize=figsize)
+        self.t = None  # 初始化时间变量
 
-    def reCalculate(self, funcs):
+    def show_pareto_front(self):
+        """
+        显示Pareto前沿
+        """
+        if self.show_pareto and self.pareto_points is not None:
+            self.draw(-1)
+            self.ax.scatter(self.pareto_points[:, 0], self.pareto_points[:, 1], c='#a94826', label='最优边界')
+            self.ax.legend()
+            plt.draw()
+            print("[ObjectiveVisualizer]显示Pareto前沿")
+            if self.save_gif:
+                self.gif_generator.add_frame(self.fig)
+
+    def reCalculate(self, funcs, t=None):
         """
         重新计算目标函数值，并保存这些数据以供后续使用。
+
+        参数:
+            funcs (list): 包含目标函数的列表，每个函数接受相同数量的自变量和一个可选的时间变量t。
+            t (float): 当前的时间参数，用于动态函数。如果不是动态函数，则不需要传入。
         """
         self.funcs = funcs
+        self.t = t  # 更新时间变量
         print("[ObjectiveVisualizer]准备计算目标函数值")
-        self.F1, self.F2 = self.calculate_objective_values(funcs, self.grids)
-        print("[ObjectiveVisualizer]目标函数值计算完成")
+        self.F1, self.F2 = self.calculate_objective_values(funcs, self.grids, t)
+        print(f"[ObjectiveVisualizer]目标函数值计算完成,t={t}")
 
     def generate_grid(self, variable_ranges, resolution):
         # 根据分辨率生成网格
         grids = [np.linspace(r[0], r[1], resolution) for r in variable_ranges]
         return np.meshgrid(*grids)
 
-    def calculate_objective_values(self, funcs, grids):
-        # 计算所有目标函数的值
+    def calculate_objective_values(self, funcs, grids, t=None):
+        """
+        计算所有目标函数的值。
+
+        参数:
+            funcs (list): 包含目标函数的列表。
+            grids (list): 网格数据。
+            t (float): 时间参数。
+
+        返回:
+            list: 每个目标函数的值。
+        """
+        if t is not None:
+            return [func(*grids, t) for func in funcs]
         return [func(*grids) for func in funcs]
 
     def pareto_front(self, F1, F2, objectives):

@@ -26,8 +26,6 @@ def binary_encode(value, var_min, var_max, num_bits):
     """
     scale = (value - var_min) / (var_max - var_min)
     int_value = int(scale * (2 ** num_bits - 1))
-    bin_str = np.binary_repr(int_value, width=num_bits)
-    print(f"binary_encode: value={value}, scale={scale}, int_value={int_value}, bin_str={bin_str},num_bits={num_bits}")
     return np.binary_repr(int_value, width=num_bits)
 
 
@@ -130,25 +128,29 @@ def decode_individual(individual, variable_ranges, num_bits):
     return decoded
 
 
-def calculate_objectives(individual, funcs, variable_ranges, num_bits):
+def calculate_objectives(individual, funcs, variable_ranges, num_bits, t):
     """
-    计算个体的目标函数值。
+    计算个体的目标函数值，支持时间变量 t。
 
     参数:
         individual (str): 个体的二进制字符串。
         funcs (list of functions): 目标函数列表。
         variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。
         num_bits (list of int): 每个变量的二进制位数。
+        t (float): 时间变量。
 
     返回:
         list of float: 个体的目标函数值列表。
 
     示例:
-        >> calculate_objectives('1010101010101010', [f1, f2], [(-2, 2), (-2, 2)], [8, 8])
+        >> calculate_objectives('1010101010101010', [f1, f2], [(-2, 2), (-2, 2)], [8, 8], 0.5)
         [1.0, 0.5]
     """
     decoded_vars = decode_individual(individual, variable_ranges, num_bits)
-    return [func(*decoded_vars) for func in funcs]
+    if t is not None:
+        return [func(*decoded_vars, t) for func in funcs]
+    else:
+        return [func(*decoded_vars) for func in funcs]
 
 
 def crossover(parent1, parent2, crossover_rate=0.9):
