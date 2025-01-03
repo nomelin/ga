@@ -1,12 +1,8 @@
 from lib.ga_basic import *
-from sklearn.neural_network import MLPRegressor
 
 
-# ======================
-# NSGA-II 主过程
-# ======================
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
-          mutation_rate=0.01):
+          mutation_rate=0.01, dynamic_funcs=False):
     """
     NSGA-II 算法主过程，支持动态目标函数。
 
@@ -17,56 +13,59 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         precision (float): 期望的搜索精度，用于确定编码长度。
         pop_size (int): 种群大小，默认值为 100。
         num_generations (int): 迭代次数，默认值为 50。
+        dynamic_funcs (bool): 是否使用动态目标函数，默认值为 False。
+        例如：
+        def f1(x1, x2, t): return x1 ** 2 + x2 ** 2 + a(t)*x1 + b(t)*x2
+        def a(t): return t
+        def b(t): return sin(t)
+        则这个函数就是参数随时间t变化的目标函数。
+        如果启用动态函数，则每个函数都需要在末尾包含一个参数 t，不论是否使用。
 
     返回:
         list: 最终种群的解（经过解码）。
     """
     # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
+    # visualizer.reCalculate(current_funcs)
+
+    # 初始化 t 为 0
+    t = 0
 
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
 
     # 非支配排序
-    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions)
+    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions,
+                                     t)
     # 展平种群
     fronts = [ind for front in fronts for ind in front]
-    # 初始化保存历史解的列表
-    historical_fronts = []  # 新增——————
-
     # 使用选择、交叉和变异生成子代种群
-    # offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
+    offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
-    # 使用预测生成初始种群和遗传操作生成新一代子代种群
-    offspring = create_offspring_with_prediction(
-        population, variable_ranges, pop_size, num_bits, historical_fronts,
-        crossover_rate, mutation_rate, de_strategy='rank', F=0.5
-    )
-    # 新增——————
-
-    # 初始化保存历史解的列表
-    historical_fronts = []  # 新增——————
     # 迭代进化过程
     for generation in range(num_generations):
         print(f"[nsga-ii] 第 {generation + 1} 代")
 
-        # 检查是否需要更换目标函数
+        # 检查是否是分段边界，如果是，则需要更换目标函数
         if generation in funcs_dict:
+            t = 0  # 分段时重置 t 为 0
             current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
             print(
-                f"[nsga-ii]更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
+                f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
+            visualizer.reCalculate(funcs=current_funcs, t=t)
+            print(f"[nsga-ii] 刷新解空间")
+        # 如果使用动态目标函数，每代都重新计算解空间
+        if dynamic_funcs:
+            print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
+            visualizer.reCalculate(funcs=current_funcs, t=t)
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
         # 非支配排序
         fronts = fast_non_dominated_sort(combined_population, current_funcs, variable_ranges, num_bits,
-                                         current_directions)
-        # 保存当前非支配解集
-        historical_fronts.append([adapter_decode_individual(ind, variable_ranges, num_bits) for ind in fronts[0]])
-        #  新增——————
-
+                                         current_directions, t)
         # 拥挤度排序
         sorted_population = crowding_distance_sort(fronts)
 
@@ -82,6 +81,9 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         # 使用选择、交叉、变异生成新一代子代种群
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
+        # 更新 t
+        t += 1
+
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
     return final_solutions
@@ -89,133 +91,9 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
 
 # ======================
 
-# 差分交叉函数
-# 新增————————
-def differential_crossover(population, variable_ranges, F=0.5, strategy='rank'):
+def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t):
     """
-    差分交叉算子，用于生成变异个体。
-
-    参数:
-        population (list): 当前种群。
-        variable_ranges (list of tuples): 每个变量的取值范围。
-        F (float): 差分缩放因子，通常取值在 [0.4, 0.9]。
-        strategy (str): 个体选择策略，可选值为 'random', 'crowding', 'rank', 'tournament'。
-
-    返回:
-        Individual: 生成的变异个体。
-    """
-    pop_size = len(population)
-    if strategy == 'random':
-        # 随机选择 3 个不同的个体
-        r1, r2, r3 = np.random.choice(range(pop_size), 3, replace=False)
-    elif strategy == 'crowding':
-        # 根据拥挤距离选择，优先选择拥挤度较低的个体
-        sorted_pop = sorted(population, key=lambda ind: ind.crowding_distance, reverse=True)
-        r1, r2, r3 = np.random.choice(range(len(sorted_pop)), 3, replace=False)
-    elif strategy == 'rank':
-        # 根据非支配排序优先选择 rank 较低的个体
-        sorted_pop = sorted(population, key=lambda ind: ind.rank)
-        r1, r2, r3 = np.random.choice(range(len(sorted_pop)), 3, replace=False)
-    elif strategy == 'tournament':
-        # 锦标赛选择
-        r1 = tournament_selection(population, 1)[0]
-        r2 = tournament_selection(population, 1)[0]
-        r3 = tournament_selection(population, 1)[0]
-    else:
-        raise ValueError(f"未知的个体选择策略: {strategy}")
-
-    # 计算变异向量
-    mutant = [
-        population[r1].binary_string[i] + F * (population[r2].binary_string[i] - population[r3].binary_string[i])
-        for i in range(len(population[0].binary_string))
-    ]
-
-    # 约束修正：确保变异个体在变量范围内
-    for i, (var_min, var_max) in enumerate(variable_ranges):
-        mutant[i] = np.clip(mutant[i], var_min, var_max)
-
-    return Individual(mutant)
-
-
-# 使用历史非支配解集，通过预测模型生成部分子代。用遗传操作补充生成剩余的子代。
-# 新增——————————
-def create_offspring_with_prediction(population, variable_ranges, pop_size, num_bits, historical_fronts,
-                                     crossover_rate=0.9, mutation_rate=0.01, de_strategy='rank', F=0.5):
-    """
-    使用差分交叉算子结合预测模型生成子代种群。
-
-    参数:
-        population (list): 当前种群。
-        variable_ranges (list of tuples): 每个变量的取值范围。
-        pop_size (int): 子代种群大小。
-        num_bits (list of int): 每个变量的二进制位数。
-        historical_fronts (list): 保存的历史非支配解集。
-        crossover_rate (float): 交叉概率。
-        mutation_rate (float): 突变概率。
-        de_strategy (str): 差分交叉的个体选择策略。
-        F (float): 差分交叉的缩放因子。
-
-    返回:
-        list: 新的子代种群。
-    """
-    # 使用历史解生成预测解
-    if len(historical_fronts) >= 3:
-        recent_fronts = historical_fronts[-3:]
-        predicted_solutions = predict_new_solutions(recent_fronts, pop_size // 2, variable_ranges)
-    else:
-        predicted_solutions = []
-
-    # 转换预测解为个体
-    predicted_individuals = [
-        Individual(adapter_binary_encode(sol, var_min, var_max, num_bits))
-        for sol, (var_min, var_max, num_bits) in zip(predicted_solutions, variable_ranges, num_bits)
-    ]
-
-    # 用差分交叉生成其余子代
-    offspring = []
-    while len(offspring) < pop_size - len(predicted_individuals):
-        child = differential_crossover(population, variable_ranges, F=F, strategy=de_strategy)
-        offspring.append(child)
-
-    return predicted_individuals + offspring
-
-
-# 使用历史非支配解集训练预测模型，生成下一代的解
-# 新增————————
-def predict_new_solutions(recent_fronts, num_solutions, variable_ranges):
-    """
-    使用历史非支配解集预测新种群解。
-
-    参数:
-        recent_fronts (list): 最近几代的非支配解集。
-        num_solutions (int): 需要预测的解数量。
-        variable_ranges (list of tuples): 每个变量的取值范围。
-
-    返回:
-        list: 预测的解。
-    """
-    # 数据准备：将最近几代的解平铺成训练集
-    X_train = []
-    Y_train = []
-    for i in range(len(recent_fronts) - 1):
-        X_train.extend(recent_fronts[i])  # 当前代解
-        Y_train.extend(recent_fronts[i + 1])  # 下一代解
-
-    # 训练回归模型
-    model = MLPRegressor(hidden_layer_sizes=(64, 64), max_iter=500, random_state=42)
-    model.fit(X_train, Y_train)
-
-    # 使用模型预测新解
-    predicted_solutions = model.predict(recent_fronts[-1])  # 最近一代预测下一代
-    predicted_solutions = np.clip(predicted_solutions, [r[0] for r in variable_ranges],
-                                  [r[1] for r in variable_ranges])  # 限制在范围内
-
-    return predicted_solutions[:num_solutions]
-
-
-def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions):
-    """
-    快速非支配排序，支持每个目标函数的优化方向。
+    快速非支配排序，支持每个目标函数的优化方向，并支持动态优化问题中的时间变量 t。
 
     参数:
         population (list): 当前种群。
@@ -223,6 +101,7 @@ def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, direct
         variable_ranges (list of tuples): 每个变量的取值范围。
         num_bits (list of int): 每个变量的二进制位数。
         directions (list of str): 每个目标的优化方向，'min' 或 'max'。
+        t (float): 时间变量，用于动态优化问题。
 
     返回:
         list[list]: 每个 rank 的解，嵌套 list。
@@ -233,9 +112,9 @@ def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, direct
         S = []
         n = 0
         for j, ind2 in enumerate(population):
-            if dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
+            if dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions, t):
                 S.append(j)
-            elif dominates(ind2, ind1, funcs, variable_ranges, num_bits, directions):
+            elif dominates(ind2, ind1, funcs, variable_ranges, num_bits, directions, t):
                 n += 1
         if n == 0:
             ranks[0].append(i)
@@ -266,9 +145,9 @@ def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, direct
     return ranks
 
 
-def dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
+def dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions, t):
     """
-    判断个体 ind1 是否支配个体 ind2，支持每个目标函数的优化方向。
+    判断个体 ind1 是否支配个体 ind2，支持每个目标函数的优化方向，并支持动态优化问题中的时间变量 t。
 
     参数:
         ind1 (str): 第一个个体的二进制字符串。
@@ -277,12 +156,13 @@ def dominates(ind1, ind2, funcs, variable_ranges, num_bits, directions):
         variable_ranges (list of tuples): 每个变量的取值范围。
         num_bits (int): 每个变量的二进制位数。
         directions (list of str): 每个目标的优化方向，'min' 或 'max'。
+        t (float): 时间变量，用于动态优化问题。
 
     返回:
         bool: 如果 ind1 支配 ind2，则返回 True；否则返回 False。
     """
-    obj_values1 = adapter_calculate_objectives(ind1, funcs, variable_ranges, num_bits)
-    obj_values2 = adapter_calculate_objectives(ind2, funcs, variable_ranges, num_bits)
+    obj_values1 = adapter_calculate_objectives(ind1, funcs, variable_ranges, num_bits, t)
+    obj_values2 = adapter_calculate_objectives(ind2, funcs, variable_ranges, num_bits, t)
 
     better_in_all_objectives = True  # 在所有目标函数上都有更好的
     strictly_better_in_at_least_one = False  # 在至少一个目标函数上有严格的更好
@@ -331,6 +211,7 @@ def crowding_distance_sort(fronts):
             ind.crowding_distance = distances[i]  # 将拥挤度赋值给个体
 
         sorted_fronts.append(sorted(front, key=lambda x: (-x.rank, -x.crowding_distance)))
+    print("拥挤度排序完成")
     # print(f"拥挤度排序后的种群: {sorted_fronts}")
     return sorted_fronts
 
@@ -430,8 +311,8 @@ def adapter_decode_individual(individual, variable_ranges, num_bits):
     return decoded_values
 
 
-def adapter_calculate_objectives(individual, funcs, variable_ranges, num_bits):
-    individual.objectives = calculate_objectives(individual.binary_string, funcs, variable_ranges, num_bits)
+def adapter_calculate_objectives(individual, funcs, variable_ranges, num_bits, t):
+    individual.objectives = calculate_objectives(individual.binary_string, funcs, variable_ranges, num_bits, t)
     return individual.objectives
 
 
