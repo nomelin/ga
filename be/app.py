@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from ga.nsgaii import nsga2
+from lib import global_var
 from lib.visual import ObjectiveVisualizer
 
 app = Flask(__name__)
@@ -92,6 +93,24 @@ def poll_visualization():
     else:
         print(f"没有可视化数据")
         return jsonify({"status": "success", "has_new_data": False, "data": None})
+
+
+@app.route('/stop', methods=['POST'])
+def stop():
+    """
+    HTTP 接口：结束算法运行，并清空队列缓存。
+    """
+    try:
+        # 算法运行在一个单独的线程中，可以通过设置全局变量或线程标志结束算法逻辑
+        global_var.set_algorithm_running(False)
+        # 清空队列中的所有数据
+        while not visualization_queue.empty():
+            visualization_queue.get()
+
+        print("NSGA-II 停止运行，队列已清空。")
+        return jsonify({"status": "success", "message": "算法已停止，队列已清空。"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/queryFuncs', methods=['GET'])
