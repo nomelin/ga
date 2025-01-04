@@ -1,7 +1,8 @@
 from lib.ga_basic import *
 
+
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
-          mutation_rate=0.01, dynamic_funcs=False):
+          mutation_rate=0.01, dynamic_funcs=False,use_differential_mutation=False, F=0.5):
     """
     NSGA-II 算法主过程，支持动态目标函数。
 
@@ -63,6 +64,7 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
 
+
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
@@ -84,6 +86,11 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         # 使用选择、交叉、变异生成新一代子代种群
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
+        # 如果启用差分变异，对子代进行差分变异
+        if use_differential_mutation:
+            print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
+            offspring = differential_mutation(offspring, F=F, variable_ranges=variable_ranges, num_bits=num_bits,precision=precision, pop_size=pop_size)
+
         # 更新 t
         if dynamic_funcs:
             t += 1
@@ -94,6 +101,94 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
 
 
 # ======================
+
+# 新增————————
+def random_selection(population, num_select=3):
+    """
+    随机选择策略：从种群中随机选择指定数量的个体。
+    """
+    return random.sample(population, num_select)
+
+def crowding_distance_selection(population, num_select=3):
+    """
+    基于拥挤度选择策略：优先选择拥挤距离较大的个体，维护种群多样性。
+    """
+    sorted_population = sorted(population, key=lambda ind: ind.crowding_distance, reverse=True)
+    return sorted_population[:num_select]
+
+def non_dominated_sorting_selection(population, num_select=3):
+    """
+    基于非支配排序选择策略：优先选择低排序的个体。
+    """
+    sorted_population = sorted(population, key=lambda ind: ind.rank)
+    return sorted_population[:num_select]
+
+def tournament_selection(population, num_select=3, tournament_size=2):
+    """
+    锦标赛选择策略：通过锦标赛选择指定数量的个体。
+    """
+    selected = []
+    for _ in range(num_select):
+        candidates = random.sample(population, tournament_size)
+        winner = min(candidates, key=lambda ind: ind.rank)  # 非支配排序优先
+        selected.append(winner)
+    return selected
+
+# 差分变异函数
+def differential_mutation(population, F=0.5, selection_strategy="tournament", best_individual=None, num_select=3, tournament_size=3, variable_ranges=None, num_bits=None, precision=None, pop_size=None):
+    """
+    差分变异函数，支持多种选择策略。
+
+    参数:
+        population (list): 当前种群。
+        F (float): 差分放缩因子，控制步长。
+        selection_strategy (str): 个体选择策略，可选 "random", "crowding", "non_dominated", "tournament"。
+        best_individual (Individual): 当前种群的最优个体（用于相关策略）。
+        num_select (int): 选择的个体数量，默认为3。
+        tournament_size (int): 锦标赛选择的大小。
+        variable_ranges (list): 每个变量的取值范围。
+        num_bits (list): 每个变量的位数。
+        precision (float): 编码精度。
+        pop_size (int): 需要生成的个体数量。
+
+    返回:
+        list: 包含多个变异后的新个体的列表。
+    """
+    # 存储生成的变异个体
+    offspring = []
+
+    # 生成 pop_size 个变异个体
+    for _ in range(pop_size):
+        # 根据选择策略选择个体
+        if selection_strategy == "random":
+            selected = random_selection(population, num_select)
+        elif selection_strategy == "crowding":
+            selected = crowding_distance_selection(population, num_select)
+        elif selection_strategy == "non_dominated":
+            selected = non_dominated_sorting_selection(population, num_select)
+        elif selection_strategy == "tournament":
+            selected = tournament_selection(population, tournament_size)
+        else:
+            raise ValueError("Invalid selection strategy")
+
+        # 将选中的个体分配给 a, b, c
+        a, b, c = selected  # 获取选中的三个个体
+
+        # 解码 a, b, c 的二进制字符串为实数值
+        decoded_a = decode_individual(a.binary_string, variable_ranges, num_bits)
+        decoded_b = decode_individual(b.binary_string, variable_ranges, num_bits)
+        decoded_c = decode_individual(c.binary_string, variable_ranges, num_bits)
+
+        # 进行差分变异运算，生成一个变异体
+        donor = [decoded_a[i] + F * (decoded_b[i] - decoded_c[i]) for i in range(len(decoded_a))]
+
+        # 将变异后的个体添加到 offspring 列表
+        offspring.append(Individual(donor))
+
+    return offspring  # 返回生成的变异个体列表
+
+
+
 
 def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t):
     """
