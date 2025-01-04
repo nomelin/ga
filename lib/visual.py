@@ -11,7 +11,7 @@ ObjectiveVisualizer类用于可视化目标函数的解空间。
 
 class ObjectiveVisualizer:
     def __init__(self, variable_ranges, funcs=None, resolution=500, show_pareto=False, objectives=None, figsize=(8, 8),
-                 visual_mode=1, save_gif=False, gif_name='default'):
+                 visual_mode=1, save_gif=False, gif_name='default', queue=None):
         """
         初始化可视化工具，计算目标函数值并生成网格。
 
@@ -47,6 +47,7 @@ class ObjectiveVisualizer:
         # 初始化figure和axes
         self.fig, self.ax = plt.subplots(figsize=figsize)
         self.t = None  # 初始化时间变量
+        self.queue = queue  # 队列用于存储可视化数据
 
     def show_pareto_front(self):
         """
@@ -185,9 +186,29 @@ class ObjectiveVisualizer:
             if self.save_gif:
                 self.gif_generator.add_frame(self.fig)
         elif self.visual_mode == 2:
-            print("未实现")
+            # 获取解空间点
+            solution_points = {"F1": self.F1.tolist(), "F2": self.F2.tolist()}
+
+            # 按照 rank 获取当前种群数据
+            population_data = []
+            for rank, group in enumerate(individuals):
+                rank_data = {
+                    "rank": rank,
+                    "points": [{"f1": ind.objectives[0], "f2": ind.objectives[1]} for ind in group]
+                }
+                population_data.append(rank_data)
+
+            # 推送数据到队列
+            if self.queue:
+                self.queue.put({
+                    "generation": generation,
+                    "solution_points": solution_points,
+                    "population_data": population_data
+                })
+
+            print(f"[ObjectiveVisualizer] Generation {generation} data 添加到队列成功.")
         else:
-            print("未实现")
+            print("[ObjectiveVisualizer] 未实现的可视化模式")
 
     def draw_populations(self, individuals, generation, pause_time=0.2):
         """
