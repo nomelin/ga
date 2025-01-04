@@ -15,7 +15,8 @@ def f2(x1, x2):
 
 
 # 定义变量范围
-variable_ranges = [(-np.pi, np.pi), (-np.pi, np.pi)]
+variable_range = [(-np.pi, np.pi), (-np.pi, np.pi)]
 
 # 定义目标函数
 funcs = [f1, f2]
+is_dynamic = False

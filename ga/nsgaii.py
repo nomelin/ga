@@ -29,7 +29,10 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     # visualizer.reCalculate(current_funcs)
 
     # 初始化 t 为 0
-    t = 0
+    if dynamic_funcs:
+        t = 0
+    else:
+        t = None
 
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
@@ -49,7 +52,8 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
 
         # 检查是否是分段边界，如果是，则需要更换目标函数
         if generation in funcs_dict:
-            t = 0  # 分段时重置 t 为 0
+            if dynamic_funcs:
+                t = 0  # 分段时重置 t 为 0
             current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
             print(
                 f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
@@ -82,7 +86,8 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
         # 更新 t
-        t += 1
+        if dynamic_funcs:
+            t += 1
 
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
