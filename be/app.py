@@ -89,7 +89,7 @@ def poll_visualization():
     if not visualization_queue.empty():
         data = visualization_queue.get()  # 获取并删除队列中的第一个元素
         # print(f"返回可视化数据, data: {data}")
-        print(f"返回可视化数据")
+        print(f"返回可视化数据,generation: {data['generation']}")
         return jsonify({"status": "success", "has_new_data": True, "data": data})
     else:
         print(f"没有可视化数据")

@@ -90,14 +90,14 @@ export default {
     return {
       form: {
         algorithm: "nsga2",
-        funcFile: null,
+        funcFile: "标准动态函数1",
         popSize: 100,
         generations: 20,
-        resolution: 100,
+        resolution: 200,
         mutation_rate: 0.01,
         crossover_rate: 0.9,
         precision: 0.01,
-        poolingTime: 500,
+        poolingTime: 600,
       },
       algorithmOptions: [
         {value: "nsga2", label: "NSGA-II"},
@@ -106,6 +106,7 @@ export default {
       funcFileOptions: [],
       chartInstance: null,
       intervalId: null,
+      frames: [],
     };
   },
   mounted() {
@@ -200,9 +201,13 @@ export default {
       this.intervalId = setInterval(() => {
         this.$request.get("/poll")
             .then((res) => {
-              console.log(res);
+              // console.log(res);
               if (res.has_new_data) {
+                console.log("-------------------------------generation:" + res.data.generation);
                 this.updateChart(res.data);
+                if (res.data.generation + 1 >= this.form.generations) {
+                  this.stopPolling(); // 结束轮询
+                }
               }
             })
             .catch((err) => {
@@ -213,16 +218,66 @@ export default {
     updateChart(data) {
       if (!this.chartInstance) {
         this.chartInstance = echarts.init(document.getElementById("chart"));
+      } else {
+        this.chartInstance.clear(); // 清除旧内容
       }
+      // console.log("data：" + JSON.stringify(data));
 
-      // 解空间点
-      const solutionData = data.solution_points.F1.map((f1, index) => [f1, data.solution_points.F2[index]]);
-      console.log(solutionData);
+      const solutionData = data.solution_points;
+      const populationData = data.population_data;
+      const maxRanks = populationData.length;
+      // console.log("solutionData:" + JSON.stringify(solutionData));
+      // console.log("populationData:" + JSON.stringify(populationData));
 
-      // 种群数据
-      const populationData = data.population_data.flatMap((rank) =>
-          rank.points.map((point) => [point.f1, point.f2])
-      );
+      const allData = [
+        ...solutionData,
+        ...populationData.flatMap((rank) => rank.points),
+      ];
+      console.log("数据量:" + allData.length);
+      // console.log("allData:"+ JSON.stringify(allData))
+      console.log("maxRanks:" + maxRanks);
+      let maxX = -Infinity; // 先初始化为负无穷，确保任何有限值都能比它大
+      let minX = Infinity; // 初始化为正无穷，确保任何有限值都能比它小
+      let maxY = -Infinity;
+      let minY = Infinity;
+      for (const p of allData) {
+        const x = p[0];
+        const y = p[1];
+        // 处理x值
+        if (x != null) { // 这里可以同时处理null和undefined情况
+          if (x > maxX) {
+            maxX = x;
+          }
+          if (x < minX) {
+            minX = x;
+          }
+        }
+        // 处理y值
+        if (y != null) {
+          if (y > maxY) {
+            maxY = y;
+          }
+          if (y < minY) {
+            minY = y;
+          }
+        }
+      }
+      console.log("maxX:" + maxX + ", maxY:" + maxY + ", minX:" + minX + ", minY:" + minY);
+
+      const rankSeries = populationData.map((rank, index) => {
+        const rankCount = maxRanks; // 总的 rank 数量
+        const hueStart = 120; // 起始颜色 (绿色)
+        const hueEnd = 0; // 结束颜色 (红色)
+        const hue = hueStart + ((hueEnd - hueStart) * index) / (rankCount - 1); // 线性插值
+        const color = `hsl(${hue}, 90%, 40%)`; // 生成 HSL 色值。色相、饱和度和亮度
+
+        return {
+          name: `Rank ${index}`,
+          type: "scatter",
+          data: rank.points.map((point) => [point.f1, point.f2]),
+          itemStyle: {color},
+        };
+      });
 
       const option = {
         title: {
@@ -230,25 +285,52 @@ export default {
           left: "center",
         },
         xAxis: {
-          name: "f1",
+          name: "F1",
+          type: "value",
+          min: minX,
+          max: maxX,
         },
         yAxis: {
-          name: "f2",
+          name: "F2",
+          type: "value",
+          min: minY,
+          max: maxY,
         },
         series: [
           {
             name: "解空间",
             type: "scatter",
             data: solutionData,
+            symbolSize: 11,
             itemStyle: {color: "lightgray"},
+            large: true,//针对大数据量的优化
           },
-          {
-            name: "当前种群",
-            type: "scatter",
-            data: populationData,
-            itemStyle: {color: "#a94826"},
-          },
+          ...rankSeries,
         ],
+        tooltip: {
+          trigger: 'item',
+          axisPointer: {
+            type: 'cross'
+          },
+          formatter: function (params) {
+            // params是包含了触发提示框的相关数据信息的对象
+            // 对于散点图（scatter类型），params.value是一个数组，包含了对应点的x和y值（这里对应f1和f2）
+            const f1 = params.value[0];
+            const f2 = params.value[1];
+            return `<b>F1:</b> ${f1}<br><b>F2:</b> ${f2}`;
+        }
+        },
+        // toolbox: {
+        //   right: 20,
+        //   feature: {
+        //     dataZoom: {}
+        //   }
+        // },
+        legend: {
+          orient: 'vertical',
+          left: 11
+        },
+        animation: false,
       };
 
       this.chartInstance.setOption(option);
