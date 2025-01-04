@@ -1,4 +1,6 @@
+from lib import global_var
 from lib.ga_basic import *
+
 
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
           mutation_rate=0.01, dynamic_funcs=False):
@@ -23,6 +25,7 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     返回:
         list: 最终种群的解（经过解码）。
     """
+    global_var.set_algorithm_running(True)  # 设置标志位，表示算法正在运行
     # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
     # visualizer.reCalculate(current_funcs)
@@ -48,6 +51,10 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     # 迭代进化过程
     for generation in range(num_generations):
         print(f"[nsga-ii] 第 {generation + 1} 代")
+
+        if not global_var.get_algorithm_running():  # 检查标志位
+            print("[nsga-ii]NSGA-II 被终止。")
+            break
 
         # 检查是否是分段边界，如果是，则需要更换目标函数
         if generation in funcs_dict:
