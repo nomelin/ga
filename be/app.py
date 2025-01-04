@@ -59,6 +59,7 @@ def start():
         num_generations = data.get("num_generations", 100)
         crossover_rate = data.get("crossover_rate", 0.9)
         mutation_rate = data.get("mutation_rate", 0.01)
+        resolution = data.get("resolution", 100)
         # 打印调试信息
         print(f"Loaded funcs: {funcs}, variable_ranges: {variable_ranges}, is_dynamic: {is_dynamic}")
 
@@ -66,7 +67,7 @@ def start():
         visualizer = ObjectiveVisualizer(
             variable_ranges=variable_ranges,
             visual_mode=2,
-            resolution=100,
+            resolution=resolution,
             queue=visualization_queue)
         print("visualizer created.")
         threading.Thread(

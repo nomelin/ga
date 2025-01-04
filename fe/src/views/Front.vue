@@ -21,6 +21,15 @@
               />
             </el-select>
           </el-form-item>
+          <el-form-item label="突变概率">
+            <el-input-number v-model="form.mutation_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+          </el-form-item>
+          <el-form-item label="交叉概率">
+            <el-input-number v-model="form.crossover_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+          </el-form-item>
+          <el-form-item label="解精度">
+            <el-input-number v-model="form.precision" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+          </el-form-item>
 
           <el-form-item label="种群大小">
             <el-input-number v-model="form.popSize" :min="10" :max="500" style="width: 100%"/>
@@ -30,9 +39,18 @@
             <el-input-number v-model="form.generations" :min="1" :max="200" style="width: 100%"/>
           </el-form-item>
 
-          <el-button type="primary" @click="startAlgorithm" style="width: 100%;">启动算法</el-button>
+
+          <div class="button-container">
+            <el-button type="primary" @click="startAlgorithm" style="width: 50%;">启动算法</el-button>
+            <el-button type="danger" @click="stopAlgorithm" style="width: 50%;">停止算法并清除缓存</el-button>
+          </div>
           <div style="margin-top: 10px;"></div>
-          <el-button type="danger" @click="stopAlgorithm" style="width: 100%;">停止算法并清除缓存</el-button>
+          <el-form-item label="分辨率">
+            <el-input-number v-model="form.resolution" :min="10" :max="500" style="width: 100%"/>
+          </el-form-item>
+          <el-form-item label="轮询间隔">
+            <el-input-number v-model="form.poolingTime" :min="100" :max="2000" style="width: 100%"/>
+          </el-form-item>
         </el-form>
       </div>
 
@@ -75,6 +93,11 @@ export default {
         funcFile: null,
         popSize: 100,
         generations: 20,
+        resolution: 100,
+        mutation_rate: 0.01,
+        crossover_rate: 0.9,
+        precision: 0.01,
+        poolingTime: 500,
       },
       algorithmOptions: [
         {value: "nsga2", label: "NSGA-II"},
@@ -157,6 +180,10 @@ export default {
         func_file: this.form.funcFile,
         pop_size: this.form.popSize,
         num_generations: this.form.generations,
+        resolution: this.form.resolution,
+        mutation_rate: this.form.mutation_rate,
+        crossover_rate: this.form.crossover_rate,
+        precision: this.form.precision,
       }).then((res) => {
         if (res.status === "success") {
           this.$message.success("算法已启动！");
@@ -173,6 +200,7 @@ export default {
       this.intervalId = setInterval(() => {
         this.$request.get("/poll")
             .then((res) => {
+              console.log(res);
               if (res.has_new_data) {
                 this.updateChart(res.data);
               }
@@ -180,7 +208,7 @@ export default {
             .catch((err) => {
               this.$message.error("获取数据失败：" + err.message);
             });
-      }, 1000); // 每1秒轮询一次
+      }, this.form.poolingTime);
     },
     updateChart(data) {
       if (!this.chartInstance) {
@@ -189,6 +217,7 @@ export default {
 
       // 解空间点
       const solutionData = data.solution_points.F1.map((f1, index) => [f1, data.solution_points.F2[index]]);
+      console.log(solutionData);
 
       // 种群数据
       const populationData = data.population_data.flatMap((rank) =>
@@ -237,5 +266,10 @@ export default {
 <style scoped>
 .el-form-item {
   margin-bottom: 20px;
+}
+
+.button-container {
+  display: flex;
+  justify-content: space-between; /* 让两个按钮均匀分布在两端，实现左右排列 */
 }
 </style>
