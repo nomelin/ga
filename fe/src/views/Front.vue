@@ -31,7 +31,7 @@
             <el-input-number v-model="form.precision" :min="0" :max="1" :step="0.01" style="width: 100%"/>
           </el-form-item>
 
-          <el-form-item label="种群大小">
+          <el-form-item label="种群大小(2倍)">
             <el-input-number v-model="form.popSize" :min="10" :max="500" style="width: 100%"/>
           </el-form-item>
 
@@ -41,8 +41,8 @@
 
 
           <div class="button-container">
-            <el-button type="primary" @click="startAlgorithm" style="width: 50%;">启动算法</el-button>
-            <el-button type="danger" @click="stopAlgorithm" style="width: 50%;">停止算法并清除缓存</el-button>
+            <el-button class="primary-button" type="primary" @click="startAlgorithm" plain>启动算法</el-button>
+            <el-button class="normal-button" type="danger" @click="stopAlgorithm" plain>停止算法&清除缓存</el-button>
           </div>
           <div style="margin-top: 10px;"></div>
           <el-form-item label="分辨率">
@@ -58,17 +58,17 @@
       <div style="padding-top: 20px;">
         <!-- 轮询状态显示-->
         <div v-if="intervalId">
-          <el-tag type="success">轮询中</el-tag>
+          <el-tag type="success" size="medium">轮询中</el-tag>
         </div>
         <div v-else>
-          <el-tag type="warning">未启动轮询</el-tag>
+          <el-tag type="warning" size="medium">未启动轮询</el-tag>
         </div>
         <div style="margin-top: 10px;"></div>
-        <el-button type="primary" @click="testConnection" style="width: 100%;">测试连接</el-button>
+        <el-button class="normal-button" type="info" @click="testConnection" plain>测试连接</el-button>
         <div style="margin-top: 10px;"></div>
-        <el-button type="warning" @click="stopPolling" style="width: 100%;">结束轮询</el-button>
+        <el-button class="primary-button" type="warning" @click="stopPolling" plain>结束轮询</el-button>
         <div style="margin-top: 10px;"></div>
-        <el-button type="danger" @click="clearChart" style="width: 100%;">清除图表</el-button>
+        <el-button class="normal-button" type="danger" @click="clearChart" plain>清除图表</el-button>
 
       </div>
     </div>
@@ -318,7 +318,7 @@ export default {
             const f1 = params.value[0];
             const f2 = params.value[1];
             return `<b>F1:</b> ${f1}<br><b>F2:</b> ${f2}`;
-        }
+          }
         },
         // toolbox: {
         //   right: 20,
@@ -354,4 +354,27 @@ export default {
   display: flex;
   justify-content: space-between; /* 让两个按钮均匀分布在两端，实现左右排列 */
 }
+
+.normal-button {
+  background-color: #ffffff;
+  color: #606266;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  font-size: 1rem;
+  width: 100%;
+  padding: 0.2rem 0.5rem; /* 按钮的内边距，可以根据需要进行调整 */;
+  height: 2.8rem;
+}
+
+.primary-button {
+  background-color: #0d539f;
+  color: #ffffff;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  font-size: 1rem;
+  width: 100%;
+  padding: 0.2rem 0.5rem; /* 按钮的内边距，可以根据需要进行调整 */;
+  height: 2.8rem
+}
+
 </style>
