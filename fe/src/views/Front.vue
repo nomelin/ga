@@ -31,6 +31,8 @@
           </el-form-item>
 
           <el-button type="primary" @click="startAlgorithm" style="width: 100%;">启动算法</el-button>
+          <div style="margin-top: 10px;"></div>
+          <el-button type="danger" @click="stopAlgorithm" style="width: 100%;">停止算法并清除缓存</el-button>
         </el-form>
       </div>
 
@@ -129,8 +131,22 @@ export default {
         this.chartInstance = null;
       }
     },
-    startAlgorithm() {
+    stopAlgorithm() {
       this.stopPolling(); // 结束轮询
+      this.$request.post('/stop')
+          .then((res) => {
+            if (res.status === 'success') {
+              this.$message.success(res.message);
+            } else {
+              this.$message.error(res.message);
+            }
+          })
+          .catch((err) => {
+            this.$message.error('停止算法失败：' + err.message);
+          });
+    },
+    startAlgorithm() {
+      this.stopAlgorithm(); // 停止算法并清除缓存，结束轮询
       this.clearChart(); // 清除图表
       if (!this.form.funcFile) {
         this.$message.error("请选择函数文件！");
