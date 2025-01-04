@@ -90,14 +90,14 @@ export default {
     return {
       form: {
         algorithm: "nsga2",
-        funcFile: null,
+        funcFile: "标准动态函数1",
         popSize: 100,
         generations: 20,
-        resolution: 100,
+        resolution: 250,
         mutation_rate: 0.01,
         crossover_rate: 0.9,
         precision: 0.01,
-        poolingTime: 500,
+        poolingTime: 600,
       },
       algorithmOptions: [
         {value: "nsga2", label: "NSGA-II"},
@@ -106,6 +106,7 @@ export default {
       funcFileOptions: [],
       chartInstance: null,
       intervalId: null,
+      frames: [],
     };
   },
   mounted() {
@@ -200,7 +201,7 @@ export default {
       this.intervalId = setInterval(() => {
         this.$request.get("/poll")
             .then((res) => {
-              console.log(res);
+              // console.log(res);
               if (res.has_new_data) {
                 this.updateChart(res.data);
               }
@@ -213,16 +214,30 @@ export default {
     updateChart(data) {
       if (!this.chartInstance) {
         this.chartInstance = echarts.init(document.getElementById("chart"));
+      } else {
+        this.chartInstance.clear(); // 清除旧内容
       }
+      // console.log("generation:" + data.generation);
 
-      // 解空间点
-      const solutionData = data.solution_points.F1.map((f1, index) => [f1, data.solution_points.F2[index]]);
-      console.log(solutionData);
+      const solutionData = data.solution_points;
+      const populationData = data.population_data;
+      // console.log("populationData:" + populationData);
 
-      // 种群数据
-      const populationData = data.population_data.flatMap((rank) =>
-          rank.points.map((point) => [point.f1, point.f2])
-      );
+      const allData = [
+        ...solutionData,
+        ...populationData.flatMap((rank) => rank.points),
+      ];
+      console.log("数据量:" + allData.length);
+      const xValues = allData.map((p) => p.f1);
+      const yValues = allData.map((p) => p.f2);
+
+      const colors = ["#006400", "#228B22", "#32CD32", "#FFA500", "#FF4500"];
+      const rankSeries = populationData.map((rank, index) => ({
+        name: `Rank ${index}`,
+        type: "scatter",
+        data: rank.points.map((point) => [point.f1, point.f2]),
+        itemStyle: {color: colors[index % colors.length]},
+      }));
 
       const option = {
         title: {
@@ -231,24 +246,26 @@ export default {
         },
         xAxis: {
           name: "f1",
+          min: Math.min(...xValues),
+          max: Math.max(...xValues),
         },
         yAxis: {
           name: "f2",
+          min: Math.min(...yValues),
+          max: Math.max(...yValues),
         },
         series: [
           {
             name: "解空间",
             type: "scatter",
             data: solutionData,
+            symbolSize: 11,
             itemStyle: {color: "lightgray"},
+            large: true,//针对大数据量的优化
           },
-          {
-            name: "当前种群",
-            type: "scatter",
-            data: populationData,
-            itemStyle: {color: "#a94826"},
-          },
+          ...rankSeries,
         ],
+        animation: false,
       };
 
       this.chartInstance.setOption(option);
