@@ -34,6 +34,8 @@ population = nsga2(
     num_generations=10,
     visualizer=visualizer,
     dynamic_funcs=True,  # 使用动态目标函数
+    use_differential_mutation=True,  # 使用差分变异
+    F=0.5
     # crossover_rate=0.9,
     # mutation_rate=0.01
 )
