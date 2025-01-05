@@ -1,45 +1,61 @@
+from lib import global_var
 from lib.LSTMPopulationPredictor import LSTMPopulationPredictor
-from lib.SimilarityDetector import SimilarityDetector
-from lib.ga_basic import binary_encode
 from lib.ga_basic import *
-
-
-
-
+from lib.SimilarityDetector import SimilarityDetector
 
 
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
           mutation_rate=0.01, dynamic_funcs=False):
     """
-    NSGA-II 算法主过程，支持动态目标函数，并集成环境检测和 LSTM 预测。
+    NSGA-II 算法主过程，支持动态目标函数。
+
+    参数:
+        funcs_dict (dict): 轮次 -> 目标函数列表及其方向。
+                           例如 {0: [[f1, f2], ['min', 'min']], 10: [[f3, f4], ['max', 'min']]}。随时间变化的目标函数列表。
+        variable_ranges (list of tuples): 每个变量的取值范围。
+        precision (float): 期望的搜索精度，用于确定编码长度。
+        pop_size (int): 种群大小，默认值为 100。
+        num_generations (int): 迭代次数，默认值为 50。
+        dynamic_funcs (bool): 是否使用动态目标函数，默认值为 False。
+        例如：
+        def f1(x1, x2, t): return x1 ** 2 + x2 ** 2 + a(t)*x1 + b(t)*x2
+        def a(t): return t
+        def b(t): return sin(t)
+        则这个函数就是参数随时间t变化的目标函数。
+        如果启用动态函数，则每个函数都需要在末尾包含一个参数 t，不论是否使用。
+
+    返回:
+        list: 最终种群的解（经过解码）。
     """
+    global_var.set_algorithm_running(True)  # 设置标志位，表示算法正在运行
     # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
-    t = 0  # 初始化时间步
+    # visualizer.reCalculate(current_funcs)
 
-    # 初始化相似性检测器
+    # 初始化 t 为 0
+    if dynamic_funcs:
+        t = 0
+    else:
+        t = None
+    # 生成环境检测器
     similarity_detector = SimilarityDetector(method="objective_difference", threshold=0.1)
 
     # 初始化 LSTM 预测器
-    input_dim = len(variable_ranges)  # 输入维度为变量个数
-    output_dim = len(variable_ranges)  # 输出维度为变量个数
-    lstm_predictor = LSTMPopulationPredictor(input_dim, output_dim, window_size=3, population_size=pop_size)
+    lstm_predictor = LSTMPopulationPredictor(input_dim=len(variable_ranges), output_dim=len(variable_ranges),
+                                             window_size=3, population_size=pop_size)
+
+    # 初始化历史最优解集
+    historical_populations = []
 
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
 
-    # 计算初始种群的目标函数值
-    previous_objectives = np.array([adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
-
-    # 初始化历史数据
-    historical_data = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
-    target_data = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
-
     # 非支配排序
-    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions, t)
+    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions,
+                                     t)
+    # 展平种群
     fronts = [ind for front in fronts for ind in front]
-
     # 使用选择、交叉和变异生成子代种群
     offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
@@ -47,45 +63,57 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     for generation in range(num_generations):
         print(f"[nsga-ii] 第 {generation + 1} 代")
 
-        # 计算当前种群的目标函数值
-        current_objectives = np.array(
-            [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
+        if not global_var.get_algorithm_running():  # 检查标志位
+            print("[nsga-ii]NSGA-II 被终止。")
+            break
 
-        # 检测环境是否发生变化
-        if similarity_detector.detect(current_objectives, previous_objectives):
-            print(f"[nsga-ii] 环境变化检测到，第 {generation + 1} 代")
-            # 触发环境变化处理逻辑
-            if generation in funcs_dict:
+        # 检查是否是分段边界，如果是，则需要更换目标函数
+        if generation in funcs_dict:
+            if dynamic_funcs:
                 t = 0  # 分段时重置 t 为 0
-                current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
-                print(
-                    f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
-                visualizer.reCalculate(funcs=current_funcs, t=t)
-                print(f"[nsga-ii] 刷新解空间")
-
-            # 使用 LSTM 预测新的种群
-            if len(historical_data) >= lstm_predictor.window_size:
-                recent_data = np.array(historical_data[-lstm_predictor.window_size:])
-                predicted_population = lstm_predictor.predict_population(recent_data)
-                if predicted_population is not None:
-                    # 边界处理和多样性增强
-                    lower_bound = [var[0] for var in variable_ranges]
-                    upper_bound = [var[1] for var in variable_ranges]
-                    predicted_population = lstm_predictor.enforce_boundaries(predicted_population, lower_bound,
-                                                                             upper_bound)
-                    predicted_population = lstm_predictor.add_random_noise(predicted_population)
-
-                    # 将预测的种群与当前种群结合
-                    population = population + [Individual(binary_encode(ind, variable_ranges, num_bits)) for ind in
-                                               predicted_population]
-
-        # 更新上一时刻的目标函数值
-        previous_objectives = current_objectives
-
+            current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
+            print(
+                f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
+            visualizer.reCalculate(funcs=current_funcs, t=t)
+            print(f"[nsga-ii] 刷新解空间")
         # 如果使用动态目标函数，每代都重新计算解空间
         if dynamic_funcs:
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
+            # 计算当前种群的目标函数值
+            current_objectives = np.array([
+                adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population
+            ])
+            # 将当前种群中的最优帕累托前沿加入历史最优解集
+            historical_populations.append(population)
+
+            # 检测环境变化
+            if similarity_detector.detect(current_objectives):
+                print(f"[nsga-ii] 环境变化，更新 LSTM 预测器")  # 要使用前几个时刻的最优帕累托前沿来训练 LSTM 预测器
+
+                # 训练 LSTM 预测器
+                n_previous_generations = len(historical_populations)
+                effective_window_size = min(n_previous_generations, lstm_predictor.window_size)  # 实际窗口大小,防止窗口越界
+                # 获取最近 effective_window_size 代的最优解集作为滑动窗口数据
+                historical_fronts = historical_populations[-effective_window_size:]
+                # 对个体进行解码
+                historical_populations_decoded = [
+                    [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in front] for front in
+                    historical_fronts
+                ]
+                # 计算当前种群的最优解集
+                current_fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits,
+                                                         current_directions, t)
+                sorted_current_fronts = crowding_distance_sort(current_fronts)
+
+                current_fronts_decoded = [
+                    [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in front] for front in
+                    current_fronts
+                ]
+
+
+
+
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
@@ -93,6 +121,7 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         # 非支配排序
         fronts = fast_non_dominated_sort(combined_population, current_funcs, variable_ranges, num_bits,
                                          current_directions, t)
+        # 拥挤度排序
         sorted_population = crowding_distance_sort(fronts)
 
         # 画点
@@ -107,20 +136,17 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         # 使用选择、交叉、变异生成新一代子代种群
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
-        # 更新历史数据
-        current_population_decoded = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
-        historical_data.append(np.array(current_population_decoded))  # 确保每个元素是 (pop_size, input_dim)
-
-        # 如果历史数据长度超过 window_size，移除最早的数据
-        if len(historical_data) > lstm_predictor.window_size:
-            historical_data.pop(0)
-
         # 更新 t
-        t += 1
+        if dynamic_funcs:
+            t += 1
 
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
     return final_solutions
+
+
+# ======================
+
 def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t):
     """
     快速非支配排序，支持每个目标函数的优化方向，并支持动态优化问题中的时间变量 t。
@@ -251,7 +277,7 @@ def create_offspring(population, variable_ranges, pop_size, num_bits, crossover_
     生成子代种群的函数，包括锦标赛选择、交叉和变异操作。
 
     参数:
-        population (list[list]): 当前种群。
+        population (list): 当前种群。
         variable_ranges (list of tuples): 每个变量的取值范围。
         pop_size (int): 种群大小。
         num_bits (int): 每个变量的二进制位数。
