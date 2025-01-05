@@ -97,7 +97,7 @@ export default {
         mutation_rate: 0.01,
         crossover_rate: 0.9,
         precision: 0.01,
-        poolingTime: 1000,
+        poolingTime: 800,
       },
       algorithmOptions: [
         {value: "nsga2", label: "NSGA-II"},
@@ -107,6 +107,7 @@ export default {
       chartInstance: null,
       intervalId: null,
       frames: [],// 存放每一代的可视化数据
+      maxRankCount: -1//用于防止残留高rank点
     };
   },
   mounted() {
@@ -219,6 +220,7 @@ export default {
       if (!this.chartInstance) {
         this.chartInstance = echarts.init(document.getElementById("chart"));
       } else {
+        console.log("清空echarts");
         this.chartInstance.clear(); // 清除旧内容
       }
       // console.log("data：" + JSON.stringify(data));
@@ -228,6 +230,11 @@ export default {
       const maxRanks = populationData.length;
       // console.log("solutionData:" + JSON.stringify(solutionData));
       // console.log("populationData:" + JSON.stringify(populationData));
+      // let populationSize = 0;
+      // for (let i = 0; i < populationData.length; i++) {
+      //   populationSize += populationData[i].points.length;
+      // }
+      // console.log("populationSize: " + populationSize)
 
       // const allData = [
       //   ...solutionData,
@@ -237,20 +244,34 @@ export default {
       // console.log("allData:"+ JSON.stringify(allData))
       console.log("maxRanks:" + maxRanks);
 
-      const rankSeries = populationData.map((rank, index) => {
-        const rankCount = maxRanks; // 总的 rank 数量
-        const hueStart = 120; // 起始颜色 (绿色)
-        const hueEnd = 0; // 结束颜色 (红色)
-        const hue = hueStart + ((hueEnd - hueStart) * index) / (rankCount - 1); // 线性插值
-        const color = `hsl(${hue}, 90%, 40%)`; // 生成 HSL 色值。色相、饱和度和亮度
+      const rankSeries = [];
+      this.maxRankCount = maxRanks > this.maxRankCount ? maxRanks : this.maxRankCount;
+      console.log("maxRankCount:" + this.maxRankCount);
 
-        return {
-          name: `Rank ${index}`,
-          type: "scatter",
-          data: rank.points.map((point) => [point.f1, point.f2]),
-          itemStyle: {color},
-        };
-      });
+      for (let i = 0; i < this.maxRankCount; i++) {
+        rankSeries.push(
+            populationData[i]
+                ? {
+                  name: `Rank ${i}`,
+                  type: "scatter",
+                  data: populationData[i].points.map((point) => [point.f1, point.f2]),
+                  itemStyle: {
+                    color: `hsl(${
+                        120 + ((0 - 120) * i) / (maxRanks - 1)
+                    }, 90%, 40%)`,
+                  },
+                }
+                : {
+                  name: ``,
+                  type: "scatter",
+                  data: [],//清除高rank的残留点
+                  itemStyle: {color: "transparent"},
+                }
+            //给高rank点填充空的数据,避免残留.
+            // timeline组件在切换时会合并新旧数据,导致旧的高rank点残留,timeline组件切换不走这个方法.目前找不到方法可以设置.
+            //或许可以利用 timeLine 组件的相关回调.
+        );
+      }
 
       this.frames[data.generation] = {
         title: `目标优化第 ${data.generation + 1} 代`,
@@ -262,7 +283,7 @@ export default {
       const timelineOptions = this.frames.map((frame, index) => {
         let maxX = -Infinity, minX = Infinity, maxY = -Infinity, minY = Infinity;
 
-        // 动态计算该帧的数据范围
+        // 动态计算当前帧的数据范围
         const allData = [
           ...frame.solutionData,
           ...frame.rankSeries.flatMap((rank) => rank.data),
@@ -279,28 +300,29 @@ export default {
           }
         }
 
-        // 提取当前帧的图例项
-        const legendData = [
-          "解空间", // 固定的解空间图例名称
-          ...frame.rankSeries.map((rank) => rank.name), // 动态生成的 Rank 图例名称
+        // 更新当前帧的 series
+        const series = [
+          {
+            name: "解空间",
+            type: "scatter",
+            data: frame.solutionData,
+            symbolSize: 11,
+            itemStyle: {color: "lightgray"},
+            large: true,
+          },
+          ...frame.rankSeries,
         ];
 
         return {
           title: {text: frame.title},
           xAxis: {name: "F1", type: "value", min: minX, max: maxX},
           yAxis: {name: "F2", type: "value", min: minY, max: maxY},
-          legend: {data: legendData, orient: "vertical", right: 11}, // 动态更新 legend
-          series: [
-            {
-              name: "解空间",
-              type: "scatter",
-              data: frame.solutionData,
-              symbolSize: 11,
-              itemStyle: {color: "lightgray"},
-              large: true,
-            },
-            ...frame.rankSeries,
-          ],
+          legend: {
+            data: ["解空间", ...frame.rankSeries.map((rank) => rank.name)],
+            orient: "vertical",
+            right: 11,
+          },
+          series,
         };
       });
 
@@ -310,10 +332,11 @@ export default {
             axisType: "category",
             data: timelineData,
             autoPlay: false,
-            playInterval: 1000,
+            playInterval: 500,
             tooltip: {
               formatter: (p) => `${p.name}`,
             },
+            // currentIndex: this.frames.length - 1, // 设置为最新的帧索引
           },
           title: {left: "center"},
           xAxis: {name: "F1", type: "value"}, // 初始设置，具体值在 options 中动态更新
