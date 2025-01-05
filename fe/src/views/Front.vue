@@ -90,7 +90,7 @@ export default {
     return {
       form: {
         algorithm: "nsga2",
-        funcFile: "标准动态函数1",
+        funcFile: "标准动态问题1",
         popSize: 100,
         generations: 20,
         resolution: 200,
@@ -328,7 +328,7 @@ export default {
         // },
         legend: {
           orient: 'vertical',
-          left: 11
+          right: 11
         },
         animation: false,
       };
