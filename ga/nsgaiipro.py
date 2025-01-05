@@ -174,12 +174,6 @@ def crowding_distance_selection(population, num_select, funcs, variable_ranges, 
 
     return selected_population
 
-def non_dominated_sorting_selection(population, num_select=3):
-    """
-    基于非支配排序选择策略：优先选择低排序的个体。
-    """
-    sorted_population = sorted(population, key=lambda ind: ind.rank)
-    return sorted_population[:num_select]
 
 
 def tournament_selection(population, num_select=3, tournament_size=2):
