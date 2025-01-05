@@ -64,11 +64,14 @@
           <el-tag type="warning" size="medium">未启动轮询</el-tag>
         </div>
         <div style="margin-top: 10px;"></div>
-        <el-button class="normal-button" type="info" @click="testConnection" plain>测试连接</el-button>
-        <div style="margin-top: 10px;"></div>
-        <el-button class="primary-button" type="warning" @click="stopPolling" plain>结束轮询</el-button>
+        <div class="button-container">
+          <el-button class="primary-button" type="warning" @click="stopPolling" plain>结束轮询</el-button>
+          <el-button class="normal-button" type="primary" @click="testConnection" plain>测试连接</el-button>
+        </div>
         <div style="margin-top: 10px;"></div>
         <el-button class="normal-button" type="danger" @click="clearChart" plain>清除图表</el-button>
+        <div style="margin-top: 10px;"></div>
+        <el-button class="normal-button" type="primary" @click="downLoadGifImg" plain>下载Gif</el-button>
 
       </div>
     </div>
@@ -128,6 +131,91 @@ export default {
         });
   },
   methods: {
+    downLoadGifImg() {
+      if (!this.chartInstance) {
+        this.$message.error("不存在图表");
+      }
+      if (this.intervalId) {
+        this.$message.error("请结束轮询,再下载Gif");
+      }
+      const gifshot = require('gifshot'); // 确保 gifshot 已安装并引入
+      const frames = [];
+      const timelineOptions = this.chartInstance.getOption().timeline;
+      const timelineLength = timelineOptions[0]?.data.length || 0;
+      console.log("时间轴帧数量:" + timelineLength);
+
+      if (timelineLength === 0) {
+        this.$message.error("时间轴数据为空，无法导出");
+        return;
+      }
+
+      let currentFrame = 0;
+      let gifWidth = 0;
+      let gifHeight = 0;
+
+      const captureFrame = () => {
+        // 切换到时间轴的当前帧
+        this.chartInstance.dispatchAction({
+          type: 'timelineChange',
+          currentIndex: currentFrame,
+        });
+
+        // 等待图表渲染完成
+        setTimeout(() => {
+          const dataURL = this.chartInstance.getDataURL({
+            type: 'png',
+            pixelRatio: 2, // 调整为需要的清晰度
+            backgroundColor: '#fff', // 设置背景色
+          });
+
+          // 创建一个 Image 对象获取宽度和高度
+          const img = new Image();
+          img.onload = () => {
+            if (gifWidth === 0 || gifHeight === 0) {
+              gifWidth = img.width;
+              gifHeight = img.height;
+            }
+            frames.push(dataURL); // 保存当前帧图像
+
+            currentFrame++;
+            if (currentFrame < timelineLength) {
+              captureFrame(); // 捕获下一帧
+            } else {
+              // 全部帧捕获完毕，生成 GIF
+              this.$message.success("GIF 正在准备中，请稍候...");
+              gifshot.createGIF(
+                  {
+                    images: frames,
+                    gifWidth: gifWidth, // 设置 GIF 宽度
+                    gifHeight: gifHeight, // 设置 GIF 高度
+                    frameDuration: 1, //一帧
+                  },
+                  function (obj) {
+                    if (!obj.error) {
+                      const gifData = obj.image;
+                      const a = document.createElement('a');
+                      a.href = gifData;
+                      a.download = 'chart-animation.gif';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      this.$message.success("GIF 下载成功");
+                    } else {
+                      this.$message.error("GIF 生成失败：" + obj.errorMsg);
+                    }
+                  }.bind(this)
+              );
+            }
+          };
+          img.src = dataURL; // 设置 Image 的 src 为当前帧的 DataURL
+        }, 200); // 确保图表完成渲染，必要时增加此值
+      };
+
+
+      // 开始捕获帧
+      captureFrame();
+
+    },
     testConnection() {
       // 测试连接，调用后端接口
       this.$request.get("/hello")
@@ -275,7 +363,7 @@ export default {
       }
 
       this.frames[data.generation] = {
-        title: `目标优化第 ${data.generation + 1} 代`,
+        title: `多目标优化第 ${data.generation + 1} 代`,
         solutionData,
         rankSeries,
       };
@@ -352,6 +440,15 @@ export default {
           },
           // legend: {orient: "vertical", right: 11},
           animation: false,
+          toolbox: {
+            show: true,
+            orient: "vertical",
+            right: "20%",
+            top: "top",
+            feature: {
+              saveAsImage: {show: true},  // 保存图表
+            },
+          },
         },
         options: timelineOptions,
       };
