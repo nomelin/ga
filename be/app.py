@@ -65,8 +65,7 @@ def start():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges, use_crossover_and_differential_mutation,
-                      use_prediction):
+def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges):
     """
     :param data: 前端传入的算法参数json
     :param funcs: 函数列表
@@ -82,6 +81,8 @@ def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges, use_crossover_an
     num_generations = data.get("num_generations", 100)
     crossover_rate = data.get("crossover_rate", 0.9)
     mutation_rate = data.get("mutation_rate", 0.01)
+    use_crossover_and_differential_mutation = data.get("use_crossover_and_differential_mutation", True)
+    use_prediction = data.get("use_prediction", True)
     resolution = data.get("resolution", 100)
     F = data.get("F", 0.5)
     regeneration_ratio = data.get("regeneration_ratio", 0.2)

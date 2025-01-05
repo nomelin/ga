@@ -21,28 +21,42 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="突变概率">
-            <el-input-number v-model="form.mutation_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
-          </el-form-item>
-          <el-form-item label="交叉概率">
-            <el-input-number v-model="form.crossover_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
-          </el-form-item>
-          <el-form-item label="解精度">
-            <el-input-number v-model="form.precision" :min="0" :max="1" :step="0.01" style="width: 100%"/>
-          </el-form-item>
+          <el-row>
+            <el-col :span="form.algorithm === 'nsga2'? 24 : 12">
+              <el-form-item label="突变概率">
+                <el-input-number v-model="form.mutation_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+              </el-form-item>
+              <el-form-item label="交叉概率">
+                <el-input-number v-model="form.crossover_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+              </el-form-item>
+              <el-form-item label="解精度">
+                <el-input-number v-model="form.precision" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+              </el-form-item>
 
-          <el-form-item label="种群大小(2倍)">
-            <el-input-number v-model="form.popSize" :min="10" :max="500" style="width: 100%"/>
-          </el-form-item>
+              <el-form-item label="种群大小(2倍)">
+                <el-input-number v-model="form.popSize" :min="10" :max="500" style="width: 100%"/>
+              </el-form-item>
 
-          <el-form-item label="代数">
-            <el-input-number v-model="form.generations" :min="1" :max="200" style="width: 100%"/>
-          </el-form-item>
+              <el-form-item label="代数">
+                <el-input-number v-model="form.generations" :min="1" :max="200" style="width: 100%"/>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12" v-if="form.algorithm === 'nsga2pro'">
+              <el-form-item label="使用差分变异">
+                <el-switch v-model="form.use_diff_mutation"/>
+              </el-form-item>
+              <el-form-item label="使用预测模型">
+                <el-switch v-model="form.use_predict_model"/>
+              </el-form-item>
+            </el-col>
+
+          </el-row>
 
 
           <div class="button-container">
             <el-button class="primary-button" type="primary" @click="startAlgorithm" plain>启动算法</el-button>
-            <el-button class="normal-button" type="danger" @click="stopAlgorithm" plain>停止算法&清除缓存</el-button>
+            <el-button class="normal-button" type="danger" @click="stopAlgorithm" plain>停止算法&清除缓存
+            </el-button>
           </div>
           <div style="margin-top: 10px;"></div>
           <el-form-item label="分辨率">
@@ -101,6 +115,8 @@ export default {
         crossover_rate: 0.9,
         precision: 0.01,
         poolingTime: 800,
+        use_diff_mutation: false,
+        use_predict_model: false,
       },
       algorithmOptions: [
         {value: "nsga2", label: "NSGA-II"},
