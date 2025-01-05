@@ -263,8 +263,8 @@ def dynamic_selection_strategy_based_on_distance(population, generation, num_gen
     print(f"Average distance: {avg_distance}")
 
     # 根据平均距离切换选择策略
-    if avg_distance > 1.0:  # 较大值表示多样性较高
-        if generation < num_generations * 0.7:
+    if avg_distance > 1.5:  # 较大值表示多样性较高
+        if generation < num_generations * 0.3:
             return 'crowding_distance_selection'  # 初期阶段，平衡收敛与多样性
         else:
             return 'tournament_selection'  # 后期阶段，加速收敛
@@ -304,7 +304,6 @@ def crossover_and_differential_mutation(
     返回:
         list: 包含多个变异和交叉后的新个体的列表。
     """
-    # 提取目标函数和方向
     funcs, directions = funcs_dict[0]  # 选择第一个优化问题（可以根据需要调整）
     # 存储生成的变异和交叉个体
     offspring = []
@@ -342,7 +341,6 @@ def crossover_and_differential_mutation(
 
         # 限制 donor 的值在 variable_ranges 范围内
         donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
-        print("donor (clipped):", donor)
 
         # 使用 encode_individual 编码 donor
         encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
