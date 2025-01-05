@@ -10,7 +10,7 @@ def f2(x1, x2, t):
 
 
 def a(t):
-    return sin(t) + 2
+    return sin(0.2 * t) + 2
 
 
 variable_range = [(-2, 2), (-2, 2)]
