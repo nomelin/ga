@@ -1,5 +1,7 @@
 from lib import global_var
+from lib.LSTMPopulationPredictor import LSTMPopulationPredictor
 from lib.ga_basic import *
+from lib.SimilarityDetector import SimilarityDetector
 
 
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
@@ -35,6 +37,15 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         t = 0
     else:
         t = None
+    # 生成环境检测器
+    similarity_detector = SimilarityDetector(method="objective_difference", threshold=0.1)
+
+    # 初始化 LSTM 预测器
+    lstm_predictor = LSTMPopulationPredictor(input_dim=len(variable_ranges), output_dim=len(variable_ranges),
+                                             window_size=3, population_size=pop_size)
+
+    # 初始化历史最优解集
+    historical_populations = []
 
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
@@ -69,6 +80,40 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         if dynamic_funcs:
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
+            # 计算当前种群的目标函数值
+            current_objectives = np.array([
+                adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population
+            ])
+            # 将当前种群中的最优帕累托前沿加入历史最优解集
+            historical_populations.append(population)
+
+            # 检测环境变化
+            if similarity_detector.detect(current_objectives):
+                print(f"[nsga-ii] 环境变化，更新 LSTM 预测器")  # 要使用前几个时刻的最优帕累托前沿来训练 LSTM 预测器
+
+                # 训练 LSTM 预测器
+                n_previous_generations = len(historical_populations)
+                effective_window_size = min(n_previous_generations, lstm_predictor.window_size)  # 实际窗口大小,防止窗口越界
+                # 获取最近 effective_window_size 代的最优解集作为滑动窗口数据
+                historical_fronts = historical_populations[-effective_window_size:]
+                # 对个体进行解码
+                historical_populations_decoded = [
+                    [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in front] for front in
+                    historical_fronts
+                ]
+                # 计算当前种群的最优解集
+                current_fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits,
+                                                         current_directions, t)
+                sorted_current_fronts = crowding_distance_sort(current_fronts)
+
+                current_fronts_decoded = [
+                    [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in front] for front in
+                    current_fronts
+                ]
+
+
+
+
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring

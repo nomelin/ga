@@ -1,11 +1,13 @@
+from lib.SimilarityDetector import SimilarityDetector
 import math
 from lib.ga_basic import *
 
 
 def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
-               mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5):
+               mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
+               regeneration_ratio=0.2, use_prediction=False):
     """
-    NSGA-II 算法主过程，支持动态目标函数。
+    NSGA-II 算法主过程，支持动态目标函数，并集成环境变化检测和种群预测功能。
 
     参数:
         funcs_dict (dict): 轮次 -> 目标函数列表及其方向。
@@ -15,6 +17,10 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         pop_size (int): 种群大小，默认值为 100。
         num_generations (int): 迭代次数，默认值为 50。
         dynamic_funcs (bool): 是否使用动态目标函数，默认值为 False。
+        use_crossover_and_differential_mutation (bool): 是否使用差分交叉与变异。
+        F (float): 差分变异控制参数。
+        regeneration_ratio (float): 环境变化时重新生成的种群比例。
+        use_prediction (bool): 是否使用预测功能（默认为 False）。
         use_crossover_and_differential_mutation: 是否使用差分交叉函数，默认为False
         F: 差分算子
         例如：
@@ -29,7 +35,6 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     """
     # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
-    # visualizer.reCalculate(current_funcs)
 
     # 初始化 t 为 0
     if dynamic_funcs:
@@ -42,12 +47,15 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
 
     # 非支配排序
-    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions,
-                                     t)
+    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions, t)
     # 展平种群
     fronts = [ind for front in fronts for ind in front]
     # 使用选择、交叉和变异生成子代种群
     offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
+
+    # 初始化相似性检测器（仅在动态环境下启用）
+    similarity_detector = SimilarityDetector(threshold=0.1) if dynamic_funcs else None
+    previous_objectives = None
 
     # 迭代进化过程
     for generation in range(num_generations):
@@ -62,12 +70,37 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                 f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
             print(f"[nsga-ii] 刷新解空间")
-        # 如果使用动态目标函数，每代都重新计算解空间
+
+        # 如果使用动态目标函数，每代都重新计算解空间，并进行环境变化检测
         if dynamic_funcs:
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
 
-        print("offspring:", offspring)
+            # 检查是否发生环境变化
+            current_objectives = np.array(
+                [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
+            if previous_objectives is not None and similarity_detector.detect(current_objectives, previous_objectives):
+                print(f"[nsga-ii] 检测到环境变化，重新生成种群")
+                regeneration_ratio = similarity_detector.calculate_retention_ratio(regeneration_ratio, 1.0)
+
+                # 重新生成一定比例的种群
+                if use_prediction:
+                    # 使用预测功能（暂时使用随机生成代替）
+                    print("[nsga-ii] 使用预测功能生成种群")
+                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
+                                                                           variable_ranges)
+                else:
+                    # 使用随机生成代替
+                    print("[nsga-ii] 使用随机生成代替预测功能")
+                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
+                                                                           variable_ranges)
+
+                # 将重新生成的种群与当前种群合并
+                population[:int(pop_size * regeneration_ratio)] = regenerated_population
+
+            # 更新当前目标函数值
+            previous_objectives = current_objectives
+
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
@@ -141,8 +174,15 @@ def crowding_distance_selection(population, num_select, funcs, variable_ranges, 
 
     return selected_population
 
+def non_dominated_sorting_selection(population, num_select=3):
+    """
+    基于非支配排序选择策略：优先选择低排序的个体。
+    """
+    sorted_population = sorted(population, key=lambda ind: ind.rank)
+    return sorted_population[:num_select]
 
-def tournament_selection(population, num_select, tournament_size=2):
+
+def tournament_selection(population, num_select=3, tournament_size=2):
     """
     锦标赛选择策略：通过锦标赛选择指定数量的个体。
     """
@@ -307,8 +347,6 @@ def crossover_and_differential_mutation(
         print(len(offspring))
 
     return offspring
-
-
 
 
 def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t):

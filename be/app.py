@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from ga.nsgaii import nsga2
+from ga.nsgaiipro import nsga2iipro
 from lib import global_var
 from lib.visual import ObjectiveVisualizer
 
@@ -64,15 +65,42 @@ def start():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges):
+def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges, use_crossover_and_differential_mutation,
+                      use_prediction):
     """
     :param data: 前端传入的算法参数json
     :param funcs: 函数列表
     :param is_dynamic: 是否是动态问题
     :param variable_ranges: 变量范围列表
+    :param use_crossover_and_differential_mutation: 是否使用交叉和差分变异
+    :param use_prediction: 是否使用预测
     """
     # TODO
-    return jsonify({"status": "error", "message": "NSGA-II PRO 还没有实现"})
+
+    precision = data.get("precision", 0.01)
+    pop_size = data.get("pop_size", 100)
+    num_generations = data.get("num_generations", 100)
+    crossover_rate = data.get("crossover_rate", 0.9)
+    mutation_rate = data.get("mutation_rate", 0.01)
+    resolution = data.get("resolution", 100)
+    F = data.get("F", 0.5)
+    regeneration_ratio = data.get("regeneration_ratio", 0.2)
+    # 启动算法
+    visualizer = ObjectiveVisualizer(
+        variable_ranges=variable_ranges,
+        visual_mode=2,
+        resolution=resolution,
+        queue=visualization_queue)
+    print("visualizer created.")
+    threading.Thread(
+        target=nsga2iipro,
+        args=(visualizer, {0: [funcs, ['min', 'min']]}, variable_ranges, precision, pop_size, num_generations,
+              crossover_rate, mutation_rate, is_dynamic, use_crossover_and_differential_mutation, use_prediction, F,
+              regeneration_ratio)
+    ).start()
+    print("nsga2iipro started.")
+
+    return jsonify({"status": "success", "message": "NSGA-II PRO started."})
 
 
 def start_nsga_ii(data, funcs, is_dynamic, variable_ranges):
