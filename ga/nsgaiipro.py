@@ -45,6 +45,12 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     else:
         t = None
 
+    # 初始化动态环境评估指标
+    mps_values = []  # 用于记录 MPS 值
+    reaction_times = []  # 用于记录 Reaction Time 值
+    reaction_start_gen = None  # 记录 Reaction Time 起点
+    reached_threshold = False  # 是否达到 Reaction Time 的目标
+
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
@@ -88,6 +94,14 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             if previous_objectives is not None and similarity_detector.detect(current_objectives, previous_objectives):
                 print(f"[nsga-ii] 检测到环境变化，重新生成种群")
                 regeneration_ratio = similarity_detector.calculate_retention_ratio(regeneration_ratio, 1.0)
+                # 计算 MPS
+                mps = np.mean(np.linalg.norm(current_objectives - previous_objectives, axis=1))
+                mps_values.append(mps)  # 记录 MPS
+                print(f"[nsga-ii] MPS = {mps}")
+
+                # 记录 Reaction Time 起点
+                reaction_start_gen = generation
+                reached_threshold = False
 
                 # 重新生成一定比例的种群
                 if use_prediction:
@@ -106,6 +120,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
 
             # 更新当前目标函数值
             previous_objectives = current_objectives
+
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
