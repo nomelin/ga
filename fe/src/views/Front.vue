@@ -185,7 +185,7 @@ export default {
         setTimeout(() => {
           const dataURL = this.chartInstance.getDataURL({
             type: 'png',
-            pixelRatio: 2, // 调整为需要的清晰度
+            pixelRatio: 1, // 调整为需要的清晰度
             backgroundColor: '#fff', // 设置背景色
           });
 
