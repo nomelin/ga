@@ -232,7 +232,7 @@ def create_offspring(population, variable_ranges, pop_size, num_bits, crossover_
     生成子代种群的函数，包括锦标赛选择、交叉和变异操作。
 
     参数:
-        population (list[list]): 当前种群。
+        population (list): 当前种群。
         variable_ranges (list of tuples): 每个变量的取值范围。
         pop_size (int): 种群大小。
         num_bits (int): 每个变量的二进制位数。
