@@ -179,6 +179,7 @@ export default {
       }
 
       this.$request.post("/start", {
+        algorithm: this.form.algorithm,
         func_file: this.form.funcFile,
         pop_size: this.form.popSize,
         num_generations: this.form.generations,

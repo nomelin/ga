@@ -51,34 +51,52 @@ def start():
         funcs = getattr(module, "funcs", None)
         variable_ranges = getattr(module, "variable_range", None)
         is_dynamic = getattr(module, "is_dynamic", False)
+        print(f"Loaded funcs: {funcs}, variable_ranges: {variable_ranges}, is_dynamic: {is_dynamic}")
         if not funcs or not variable_ranges:
             return jsonify({"status": "error", "message": "Invalid function file structure"}), 400
 
-        precision = data.get("precision", 0.01)
-        pop_size = data.get("pop_size", 100)
-        num_generations = data.get("num_generations", 100)
-        crossover_rate = data.get("crossover_rate", 0.9)
-        mutation_rate = data.get("mutation_rate", 0.01)
-        resolution = data.get("resolution", 100)
-        # 打印调试信息
-        print(f"Loaded funcs: {funcs}, variable_ranges: {variable_ranges}, is_dynamic: {is_dynamic}")
-
-        # 启动算法
-        visualizer = ObjectiveVisualizer(
-            variable_ranges=variable_ranges,
-            visual_mode=2,
-            resolution=resolution,
-            queue=visualization_queue)
-        print("visualizer created.")
-        threading.Thread(
-            target=nsga2,
-            args=(visualizer, {0: [funcs, ['min', 'min']]}, variable_ranges, precision, pop_size, num_generations,
-                  crossover_rate, mutation_rate, is_dynamic)
-        ).start()
-        print("nsga2 started.")
-        return jsonify({"status": "success", "message": "NSGA-II started."})
+        algorithm = data.get("algorithm", "nsga2")
+        if algorithm == "nsga2":
+            return start_nsga_ii(data, funcs, is_dynamic, variable_ranges)
+        elif algorithm == "nsga2pro":
+            return start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges):
+    """
+    :param data: 前端传入的算法参数json
+    :param funcs: 函数列表
+    :param is_dynamic: 是否是动态问题
+    :param variable_ranges: 变量范围列表
+    """
+    # TODO
+    return jsonify({"status": "error", "message": "NSGA-II PRO 还没有实现"})
+
+
+def start_nsga_ii(data, funcs, is_dynamic, variable_ranges):
+    # 获取算法参数
+    precision = data.get("precision", 0.01)
+    pop_size = data.get("pop_size", 100)
+    num_generations = data.get("num_generations", 100)
+    crossover_rate = data.get("crossover_rate", 0.9)
+    mutation_rate = data.get("mutation_rate", 0.01)
+    resolution = data.get("resolution", 100)
+    # 启动算法
+    visualizer = ObjectiveVisualizer(
+        variable_ranges=variable_ranges,
+        visual_mode=2,
+        resolution=resolution,
+        queue=visualization_queue)
+    print("visualizer created.")
+    threading.Thread(
+        target=nsga2,
+        args=(visualizer, {0: [funcs, ['min', 'min']]}, variable_ranges, precision, pop_size, num_generations,
+              crossover_rate, mutation_rate, is_dynamic)
+    ).start()
+    print("nsga2 started.")
+    return jsonify({"status": "success", "message": "NSGA-II started."})
 
 
 @app.route('/poll', methods=['GET'])
