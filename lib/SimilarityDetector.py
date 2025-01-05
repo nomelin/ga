@@ -55,4 +55,5 @@ class SimilarityDetector:
         """
         # 当归一化差异接近0时，保留比例接近最大；差异增大时，保留比例降低
         retention_ratio = max(min_ratio, max_ratio * (1 - self.normalized_difference))
+        print(f"Normalized difference: {self.normalized_difference:.4f}, Retention ratio: {retention_ratio:.4f},min_ratio: {min_ratio:.4f}, max_ratio: {max_ratio:.4f}")
         return retention_ratio

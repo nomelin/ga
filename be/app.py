@@ -96,8 +96,8 @@ def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges):
     threading.Thread(
         target=nsga2iipro,
         args=(visualizer, {0: [funcs, ['min', 'min']]}, variable_ranges, precision, pop_size, num_generations,
-              crossover_rate, mutation_rate, is_dynamic, use_crossover_and_differential_mutation, use_prediction, F,
-              regeneration_ratio)
+              crossover_rate, mutation_rate, is_dynamic, use_crossover_and_differential_mutation, F,
+              regeneration_ratio,use_prediction)
     ).start()
     print("nsga2iipro started.")
 
