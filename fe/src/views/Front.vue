@@ -85,7 +85,11 @@
         <div style="margin-top: 10px;"></div>
         <el-button class="normal-button" type="danger" @click="clearChart" plain>清除图表</el-button>
         <div style="margin-top: 10px;"></div>
-        <el-button class="normal-button" type="primary" @click="downLoadGifImg" plain>下载Gif</el-button>
+        <div class="button-container">
+          <div style="color: #72767b"> gif渲染时间</div>
+          <el-input-number v-model="gifChangeTime" :min="100" :max="2000" style="width: 50%"/>
+          <el-button class="normal-button" type="primary" @click="downLoadGifImg" plain style="margin-left: 10px;">下载Gif</el-button>
+        </div>
 
       </div>
     </div>
@@ -126,7 +130,8 @@ export default {
       chartInstance: null,
       intervalId: null,
       frames: [],// 存放每一代的可视化数据
-      maxRankCount: -1//用于防止残留高rank点
+      maxRankCount: -1,//用于防止残留高rank点
+      gifChangeTime: 200, // gif 切换时间
     };
   },
   mounted() {
@@ -224,7 +229,7 @@ export default {
             }
           };
           img.src = dataURL; // 设置 Image 的 src 为当前帧的 DataURL
-        }, 200); // 确保图表完成渲染，必要时增加此值
+        }, this.gifChangeTime); // 确保图表完成渲染，必要时增加此值
       };
 
 
