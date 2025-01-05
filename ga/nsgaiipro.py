@@ -321,7 +321,6 @@ def crossover_and_differential_mutation(
 
         # 限制 donor 的值在 variable_ranges 范围内
         donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
-        print("donor (clipped):", donor)
 
         # 使用 encode_individual 编码 donor
         encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
