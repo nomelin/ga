@@ -1,8 +1,8 @@
 from lib.ga_basic import *
 
 
-def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
-          mutation_rate=0.01, dynamic_funcs=False,use_differential_mutation=False, F=0.5):
+def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
+               mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5):
     """
     NSGA-II 算法主过程，支持动态目标函数。
 
@@ -64,7 +64,7 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
 
-
+        print("offspring:", offspring)
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
@@ -86,10 +86,10 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         # 使用选择、交叉、变异生成新一代子代种群
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
-        # 如果启用差分变异，对子代进行差分变异
-        if use_differential_mutation:
+        # 如果启用差分交叉变异，对子代进行差分交叉变异
+        if use_crossover_and_differential_mutation:
             print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
-            offspring = differential_mutation(offspring, F=F, variable_ranges=variable_ranges, num_bits=num_bits,precision=precision, pop_size=pop_size)
+            offspring = crossover_and_differential_mutation(offspring, F=F,crossover_rate=crossover_rate, variable_ranges=variable_ranges, precision=precision, pop_size=pop_size)
 
         # 更新 t
         if dynamic_funcs:
@@ -135,29 +135,45 @@ def tournament_selection(population, num_select=3, tournament_size=2):
     return selected
 
 # 差分变异函数
-def differential_mutation(population, F=0.5, selection_strategy="tournament", best_individual=None, num_select=3, tournament_size=3, variable_ranges=None, num_bits=None, precision=None, pop_size=None):
+def crossover_and_differential_mutation(
+        population,
+        F=0.5,
+        crossover_rate=0.9,
+        selection_strategy="tournament",
+        num_select=3,
+        tournament_size=2,
+        variable_ranges=None,
+        precision=None,
+        pop_size=None,
+):
     """
-    差分变异函数，支持多种选择策略。
+    差分交叉变异操作，先进行差分变异，再根据交叉概率进行交叉操作。
 
     参数:
         population (list): 当前种群。
         F (float): 差分放缩因子，控制步长。
+        crossover_rate (float): 交叉概率，控制交叉操作的发生。
         selection_strategy (str): 个体选择策略，可选 "random", "crowding", "non_dominated", "tournament"。
-        best_individual (Individual): 当前种群的最优个体（用于相关策略）。
         num_select (int): 选择的个体数量，默认为3。
         tournament_size (int): 锦标赛选择的大小。
         variable_ranges (list): 每个变量的取值范围。
-        num_bits (list): 每个变量的位数。
         precision (float): 编码精度。
         pop_size (int): 需要生成的个体数量。
 
     返回:
-        list: 包含多个变异后的新个体的列表。
+        list: 包含多个变异和交叉后的新个体的列表。
     """
-    # 存储生成的变异个体
+    # 存储生成的变异和交叉个体
     offspring = []
 
-    # 生成 pop_size 个变异个体
+    # 动态计算 num_bits
+    num_bits = [calculate_num_bits(r[0], r[1], precision) for r in variable_ranges]
+
+    # 遍历 variable_ranges 获取 var_min 和 var_max 列表
+    var_min = [r[0] for r in variable_ranges]
+    var_max = [r[1] for r in variable_ranges]
+
+    # 生成 pop_size 个变异交叉后的个体
     for _ in range(pop_size):
         # 根据选择策略选择个体
         if selection_strategy == "random":
@@ -167,12 +183,12 @@ def differential_mutation(population, F=0.5, selection_strategy="tournament", be
         elif selection_strategy == "non_dominated":
             selected = non_dominated_sorting_selection(population, num_select)
         elif selection_strategy == "tournament":
-            selected = tournament_selection(population, tournament_size)
+            selected = tournament_selection(population, num_select, tournament_size)
         else:
             raise ValueError("Invalid selection strategy")
 
         # 将选中的个体分配给 a, b, c
-        a, b, c = selected  # 获取选中的三个个体
+        a, b, c = selected
 
         # 解码 a, b, c 的二进制字符串为实数值
         decoded_a = decode_individual(a.binary_string, variable_ranges, num_bits)
@@ -182,10 +198,27 @@ def differential_mutation(population, F=0.5, selection_strategy="tournament", be
         # 进行差分变异运算，生成一个变异体
         donor = [decoded_a[i] + F * (decoded_b[i] - decoded_c[i]) for i in range(len(decoded_a))]
 
-        # 将变异后的个体添加到 offspring 列表
-        offspring.append(Individual(donor))
+        # 限制 donor 的值在 variable_ranges 范围内
+        donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
+        print("donor (clipped):", donor)
 
-    return offspring  # 返回生成的变异个体列表
+        # 使用 encode_individual 编码 donor
+        encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
+
+        # 进行交叉操作，结合 donor 和父代个体生成新的个体
+        if random.random() < crossover_rate:
+            # 执行交叉操作
+            offspring1, offspring2 = crossover(encoded_donor, a.binary_string, crossover_rate)
+        else:
+            # 如果不交叉，直接将变异体加入 offspring
+            offspring1 = encoded_donor
+            offspring2 = encoded_donor
+
+        # 将交叉后的个体加入 offspring 列表
+        offspring.append(Individual(binary_string=offspring1))
+        offspring.append(Individual(binary_string=offspring2))
+
+    return offspring
 
 
 

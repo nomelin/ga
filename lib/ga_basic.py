@@ -71,6 +71,22 @@ def calculate_num_bits(var_min, var_max, precision):
     num_bits = int(np.ceil(np.log2(range_size / precision)))
     return num_bits
 
+def encode_individual(individual, var_min, var_max, precision):
+    """
+    将个体中的所有浮点数值编码为二进制字符串并拼接。
+
+    参数:
+        individual (list of float): 要编码的个体列表，每个元素是浮点数。
+        var_min (float): 变量的最小值。
+        var_max (float): 变量的最大值。
+        precision (float): 期望的搜索精度（决定二进制位数）。
+
+    返回:
+        str: 拼接后的二进制字符串。
+    """
+    num_bits = calculate_num_bits(var_min, var_max, precision)
+    binary_string = ''.join([binary_encode(value, var_min, var_max, num_bits) for value in individual])
+    return binary_string
 
 def initialize_population(pop_size, num_bits, variable_ranges):
     """

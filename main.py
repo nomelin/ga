@@ -1,4 +1,5 @@
 from ga.nsgaii import nsga2
+from ga.nsgaiipro import nsga2iipro
 from lib.visual import ObjectiveVisualizer
 
 
@@ -26,7 +27,7 @@ visualizer = ObjectiveVisualizer(
     figsize=(12, 12)
 )
 
-population = nsga2(
+population = nsga2iipro(
     funcs_dict={0: [[f1, f2], ['min', 'min']]},
     variable_ranges=variable_ranges,
     precision=0.01,
@@ -34,6 +35,8 @@ population = nsga2(
     num_generations=10,
     visualizer=visualizer,
     dynamic_funcs=True,  # 使用动态目标函数
+    use_crossover_and_differential_mutation=True, # 使用差分交叉变异
+    F=0.5
     # crossover_rate=0.9,
     # mutation_rate=0.01
 )
