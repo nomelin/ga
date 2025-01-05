@@ -277,6 +277,7 @@ export default {
     startAlgorithm() {
       this.stopAlgorithm(); // 停止算法并清除缓存，结束轮询
       this.clearChart(); // 清除图表
+      this.frames = []; // 清空帧数据
       if (!this.form.funcFile) {
         this.$message.error("请选择函数文件！");
         return;
