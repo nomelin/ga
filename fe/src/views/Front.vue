@@ -182,6 +182,7 @@ export default {
               captureFrame(); // 捕获下一帧
             } else {
               // 全部帧捕获完毕，生成 GIF
+              this.$message.success("GIF 正在准备中，请稍候...");
               gifshot.createGIF(
                   {
                     images: frames,
