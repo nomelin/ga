@@ -121,7 +121,6 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             # 更新当前目标函数值
             previous_objectives = current_objectives
 
-
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
@@ -146,8 +145,10 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         # 如果启用差分交叉变异，对子代进行差分交叉变异
         if use_crossover_and_differential_mutation:
             print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
-            offspring = crossover_and_differential_mutation(offspring, F=F,crossover_rate=crossover_rate,generation=generation,
-                                                            variable_ranges=variable_ranges, precision=precision, pop_size=pop_size,funcs_dict=funcs_dict,t=t)
+            offspring = crossover_and_differential_mutation(offspring, F=F, crossover_rate=crossover_rate,
+                                                            generation=generation,
+                                                            variable_ranges=variable_ranges, precision=precision,
+                                                            pop_size=pop_size, funcs_dict=funcs_dict, t=t)
 
         # 更新 t
         if dynamic_funcs:
@@ -155,6 +156,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
 
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
+    print(f"mps = {np.mean(mps_values)}")
     return final_solutions
 
 
@@ -166,6 +168,7 @@ def random_selection(population, num_select):
     随机选择策略：从种群中随机选择指定数量的个体。
     """
     return random.sample(population, num_select)
+
 
 def crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions, t):
     """
@@ -196,7 +199,6 @@ def crowding_distance_selection(population, num_select, funcs, variable_ranges, 
     return selected_population
 
 
-
 def tournament_selection(population, num_select=3, tournament_size=2):
     """
     锦标赛选择策略：通过锦标赛选择指定数量的个体。
@@ -207,6 +209,7 @@ def tournament_selection(population, num_select=3, tournament_size=2):
         winner = min(candidates, key=lambda ind: ind.rank)  # 非支配排序优先
         selected.append(winner)
     return selected
+
 
 # 计算种群平均距离
 def calculate_population_average_distance(population, variable_ranges, precision):
@@ -225,7 +228,6 @@ def calculate_population_average_distance(population, variable_ranges, precision
     total_distance = 0
     num_individuals = len(population)
 
-
     # 计算每对个体之间的欧几里得距离
     for i in range(num_individuals):
         for j in range(i + 1, num_individuals):
@@ -242,6 +244,7 @@ def calculate_population_average_distance(population, variable_ranges, precision
     average_distance = total_distance / num_pairs if num_pairs > 0 else 0
 
     return average_distance
+
 
 # 动态选择个体选择策略
 def dynamic_selection_strategy_based_on_distance(population, generation, num_generations, variable_ranges, precision):
