@@ -1,4 +1,5 @@
 from lib.SimilarityDetector import SimilarityDetector
+import math
 from lib.ga_basic import *
 
 
@@ -20,6 +21,14 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         F (float): 差分变异控制参数。
         regeneration_ratio (float): 环境变化时重新生成的种群比例。
         use_prediction (bool): 是否使用预测功能（默认为 False）。
+        use_crossover_and_differential_mutation: 是否使用差分交叉函数，默认为False
+        F: 差分算子
+        例如：
+        def f1(x1, x2, t): return x1 ** 2 + x2 ** 2 + a(t)*x1 + b(t)*x2
+        def a(t): return t
+        def b(t): return sin(t)
+        则这个函数就是参数随时间t变化的目标函数。
+        如果启用动态函数，则每个函数都需要在末尾包含一个参数 t，不论是否使用。
 
     返回:
         list: 最终种群的解（经过解码）。
@@ -116,9 +125,8 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         # 如果启用差分交叉变异，对子代进行差分交叉变异
         if use_crossover_and_differential_mutation:
             print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
-            offspring = crossover_and_differential_mutation(offspring, F=F, crossover_rate=crossover_rate,
-                                                            variable_ranges=variable_ranges, precision=precision,
-                                                            pop_size=pop_size)
+            offspring = crossover_and_differential_mutation(offspring, F=F,crossover_rate=crossover_rate,generation=generation,
+                                                            variable_ranges=variable_ranges, precision=precision, pop_size=pop_size,funcs_dict=funcs_dict,t=t)
 
         # 更新 t
         if dynamic_funcs:
@@ -132,20 +140,39 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
 # ======================
 
 # 新增————————
-def random_selection(population, num_select=3):
+def random_selection(population, num_select):
     """
     随机选择策略：从种群中随机选择指定数量的个体。
     """
     return random.sample(population, num_select)
 
-
-def crowding_distance_selection(population, num_select=3):
+def crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions, t):
     """
     基于拥挤度选择策略：优先选择拥挤距离较大的个体，维护种群多样性。
     """
-    sorted_population = sorted(population, key=lambda ind: ind.crowding_distance, reverse=True)
-    return sorted_population[:num_select]
+    # 首先，进行非支配排序，将种群分成多个前沿
+    fronts = fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t)  # 获取非支配排序结果
 
+    # 对每个前沿进行拥挤度排序
+    sorted_fronts = crowding_distance_sort(fronts)
+
+    selected_population = []
+    remaining = num_select
+
+    # 选择个体，首先选择最前沿的个体，直到选满
+    for front in sorted_fronts:
+        if remaining <= 0:
+            break
+        if len(front) <= remaining:
+            selected_population.extend(front)
+            remaining -= len(front)
+        else:
+            # 如果当前前沿个体多于剩余需要的个体，则按拥挤度排序，选择拥挤度最大的个体
+            front_sorted_by_distance = sorted(front, key=lambda x: x.crowding_distance, reverse=True)
+            selected_population.extend(front_sorted_by_distance[:remaining])
+            remaining = 0
+
+    return selected_population
 
 def non_dominated_sorting_selection(population, num_select=3):
     """
@@ -166,18 +193,84 @@ def tournament_selection(population, num_select=3, tournament_size=2):
         selected.append(winner)
     return selected
 
+# 计算种群平均距离
+def calculate_population_average_distance(population, variable_ranges, precision):
+    """
+    基于决策变量（解码后的值）计算种群的平均欧几里得距离。
+
+    参数：
+        population (list): 当前种群，包含所有个体。
+        variable_ranges (list): 每个变量的取值范围。
+        precision (float): 编码精度。
+
+    返回：
+        float: 种群中所有个体之间的平均距离。
+    """
+    num_bits = [calculate_num_bits(r[0], r[1], precision) for r in variable_ranges]
+    total_distance = 0
+    num_individuals = len(population)
+
+
+    # 计算每对个体之间的欧几里得距离
+    for i in range(num_individuals):
+        for j in range(i + 1, num_individuals):
+            # 获取个体 i 和个体 j 的解码后的实数值
+            decoded_i = decode_individual(population[i].binary_string, variable_ranges, num_bits)
+            decoded_j = decode_individual(population[j].binary_string, variable_ranges, num_bits)
+
+            # 计算欧几里得距离
+            distance = math.sqrt(sum((decoded_i[k] - decoded_j[k]) ** 2 for k in range(len(decoded_i))))
+            total_distance += distance
+
+    # 计算平均距离
+    num_pairs = num_individuals * (num_individuals - 1) / 2  # 计算所有个体的距离对数
+    average_distance = total_distance / num_pairs if num_pairs > 0 else 0
+
+    return average_distance
+
+# 动态选择个体选择策略
+def dynamic_selection_strategy_based_on_distance(population, generation, num_generations, variable_ranges, precision):
+    """
+    基于种群的平均距离来动态选择个体选择策略。
+
+    参数：
+        population (list): 当前种群，包含所有个体。
+        generation (int): 当前代数。
+        num_generations (int): 最大代数。
+        variable_ranges (list): 每个变量的取值范围。
+        precision (float): 编码精度。
+
+    返回：
+        str: 当前选择的个体选择策略。
+    """
+    # 计算种群的平均距离
+    avg_distance = calculate_population_average_distance(population, variable_ranges, precision)
+    print(f"Average distance: {avg_distance}")
+
+    # 根据平均距离切换选择策略
+    if avg_distance > 1.0:  # 较大值表示多样性较高
+        if generation < num_generations * 0.7:
+            return 'crowding_distance_selection'  # 初期阶段，平衡收敛与多样性
+        else:
+            return 'tournament_selection'  # 后期阶段，加速收敛
+    else:  # 如果种群多样性较低，增大收敛力度
+        return 'tournament_selection'  # 加速收敛
+
 
 # 差分变异函数
 def crossover_and_differential_mutation(
         population,
         F=0.5,
         crossover_rate=0.9,
-        selection_strategy="tournament",
+        generation=None,
+        num_generations=50,
         num_select=3,
         tournament_size=2,
         variable_ranges=None,
         precision=None,
         pop_size=None,
+        funcs_dict=None,
+        t=None,
 ):
     """
     差分交叉变异操作，先进行差分变异，再根据交叉概率进行交叉操作。
@@ -186,9 +279,9 @@ def crossover_and_differential_mutation(
         population (list): 当前种群。
         F (float): 差分放缩因子，控制步长。
         crossover_rate (float): 交叉概率，控制交叉操作的发生。
-        selection_strategy (str): 个体选择策略，可选 "random", "crowding", "non_dominated", "tournament"。
+        generation: 当前代数
+        num_generation: 最大迭代次数
         num_select (int): 选择的个体数量，默认为3。
-        tournament_size (int): 锦标赛选择的大小。
         variable_ranges (list): 每个变量的取值范围。
         precision (float): 编码精度。
         pop_size (int): 需要生成的个体数量。
@@ -196,9 +289,13 @@ def crossover_and_differential_mutation(
     返回:
         list: 包含多个变异和交叉后的新个体的列表。
     """
+    # 提取目标函数和方向
+    funcs, directions = funcs_dict[0]  # 选择第一个优化问题（可以根据需要调整）
     # 存储生成的变异和交叉个体
     offspring = []
-
+    # 基于种群的平均距离动态选择个体选择策略
+    selected_strategy = dynamic_selection_strategy_based_on_distance(population, generation, num_generations,
+                                                                     variable_ranges, precision)
     # 动态计算 num_bits
     num_bits = [calculate_num_bits(r[0], r[1], precision) for r in variable_ranges]
 
@@ -208,17 +305,14 @@ def crossover_and_differential_mutation(
 
     # 生成 pop_size 个变异交叉后的个体
     for _ in range(pop_size):
-        # 根据选择策略选择个体
-        if selection_strategy == "random":
-            selected = random_selection(population, num_select)
-        elif selection_strategy == "crowding":
-            selected = crowding_distance_selection(population, num_select)
-        elif selection_strategy == "non_dominated":
-            selected = non_dominated_sorting_selection(population, num_select)
-        elif selection_strategy == "tournament":
-            selected = tournament_selection(population, num_select, tournament_size)
-        else:
-            raise ValueError("Invalid selection strategy")
+        # 获取动态选择的策略
+        if selected_strategy == 'random_selection':
+            selected = random_selection(population, num_select)  # 只需要 population 和 num_select
+        elif selected_strategy == 'crowding_distance_selection':
+            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,
+                                                   t)  # 需要 funcs, variable_ranges, num_bits, directions, t
+        elif selected_strategy == 'tournament_selection':
+            selected = tournament_selection(population, num_select, tournament_size)  # 需要 tournament_size 参数（默认为 2）
 
         # 将选中的个体分配给 a, b, c
         a, b, c = selected
@@ -250,6 +344,7 @@ def crossover_and_differential_mutation(
         # 将交叉后的个体加入 offspring 列表
         offspring.append(Individual(binary_string=offspring1))
         offspring.append(Individual(binary_string=offspring2))
+        print(len(offspring))
 
     return offspring
 
