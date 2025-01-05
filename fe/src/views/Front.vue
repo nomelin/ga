@@ -21,8 +21,17 @@
               />
             </el-select>
           </el-form-item>
+          <el-form-item label="突变概率">
+            <el-input-number v-model="form.mutation_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+          </el-form-item>
+          <el-form-item label="交叉概率">
+            <el-input-number v-model="form.crossover_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+          </el-form-item>
+          <el-form-item label="解精度">
+            <el-input-number v-model="form.precision" :min="0" :max="1" :step="0.01" style="width: 100%"/>
+          </el-form-item>
 
-          <el-form-item label="种群大小">
+          <el-form-item label="种群大小(2倍)">
             <el-input-number v-model="form.popSize" :min="10" :max="500" style="width: 100%"/>
           </el-form-item>
 
@@ -30,9 +39,18 @@
             <el-input-number v-model="form.generations" :min="1" :max="200" style="width: 100%"/>
           </el-form-item>
 
-          <el-button type="primary" @click="startAlgorithm" style="width: 100%;">启动算法</el-button>
+
+          <div class="button-container">
+            <el-button class="primary-button" type="primary" @click="startAlgorithm" plain>启动算法</el-button>
+            <el-button class="normal-button" type="danger" @click="stopAlgorithm" plain>停止算法&清除缓存</el-button>
+          </div>
           <div style="margin-top: 10px;"></div>
-          <el-button type="danger" @click="stopAlgorithm" style="width: 100%;">停止算法并清除缓存</el-button>
+          <el-form-item label="分辨率">
+            <el-input-number v-model="form.resolution" :min="10" :max="500" style="width: 100%"/>
+          </el-form-item>
+          <el-form-item label="轮询间隔">
+            <el-input-number v-model="form.poolingTime" :min="100" :max="2000" style="width: 100%"/>
+          </el-form-item>
         </el-form>
       </div>
 
@@ -40,17 +58,17 @@
       <div style="padding-top: 20px;">
         <!-- 轮询状态显示-->
         <div v-if="intervalId">
-          <el-tag type="success">轮询中</el-tag>
+          <el-tag type="success" size="medium">轮询中</el-tag>
         </div>
         <div v-else>
-          <el-tag type="warning">未启动轮询</el-tag>
+          <el-tag type="warning" size="medium">未启动轮询</el-tag>
         </div>
         <div style="margin-top: 10px;"></div>
-        <el-button type="primary" @click="testConnection" style="width: 100%;">测试连接</el-button>
+        <el-button class="normal-button" type="info" @click="testConnection" plain>测试连接</el-button>
         <div style="margin-top: 10px;"></div>
-        <el-button type="warning" @click="stopPolling" style="width: 100%;">结束轮询</el-button>
+        <el-button class="primary-button" type="warning" @click="stopPolling" plain>结束轮询</el-button>
         <div style="margin-top: 10px;"></div>
-        <el-button type="danger" @click="clearChart" style="width: 100%;">清除图表</el-button>
+        <el-button class="normal-button" type="danger" @click="clearChart" plain>清除图表</el-button>
 
       </div>
     </div>
@@ -72,9 +90,14 @@ export default {
     return {
       form: {
         algorithm: "nsga2",
-        funcFile: null,
+        funcFile: "标准动态问题1",
         popSize: 100,
         generations: 20,
+        resolution: 200,
+        mutation_rate: 0.01,
+        crossover_rate: 0.9,
+        precision: 0.01,
+        poolingTime: 600,
       },
       algorithmOptions: [
         {value: "nsga2", label: "NSGA-II"},
@@ -83,6 +106,7 @@ export default {
       funcFileOptions: [],
       chartInstance: null,
       intervalId: null,
+      frames: [],
     };
   },
   mounted() {
@@ -157,6 +181,10 @@ export default {
         func_file: this.form.funcFile,
         pop_size: this.form.popSize,
         num_generations: this.form.generations,
+        resolution: this.form.resolution,
+        mutation_rate: this.form.mutation_rate,
+        crossover_rate: this.form.crossover_rate,
+        precision: this.form.precision,
       }).then((res) => {
         if (res.status === "success") {
           this.$message.success("算法已启动！");
@@ -173,27 +201,83 @@ export default {
       this.intervalId = setInterval(() => {
         this.$request.get("/poll")
             .then((res) => {
+              // console.log(res);
               if (res.has_new_data) {
+                console.log("-------------------------------generation:" + res.data.generation);
                 this.updateChart(res.data);
+                if (res.data.generation + 1 >= this.form.generations) {
+                  this.stopPolling(); // 结束轮询
+                }
               }
             })
             .catch((err) => {
               this.$message.error("获取数据失败：" + err.message);
             });
-      }, 1000); // 每1秒轮询一次
+      }, this.form.poolingTime);
     },
     updateChart(data) {
       if (!this.chartInstance) {
         this.chartInstance = echarts.init(document.getElementById("chart"));
+      } else {
+        this.chartInstance.clear(); // 清除旧内容
       }
+      // console.log("data：" + JSON.stringify(data));
 
-      // 解空间点
-      const solutionData = data.solution_points.F1.map((f1, index) => [f1, data.solution_points.F2[index]]);
+      const solutionData = data.solution_points;
+      const populationData = data.population_data;
+      const maxRanks = populationData.length;
+      // console.log("solutionData:" + JSON.stringify(solutionData));
+      // console.log("populationData:" + JSON.stringify(populationData));
 
-      // 种群数据
-      const populationData = data.population_data.flatMap((rank) =>
-          rank.points.map((point) => [point.f1, point.f2])
-      );
+      const allData = [
+        ...solutionData,
+        ...populationData.flatMap((rank) => rank.points),
+      ];
+      console.log("数据量:" + allData.length);
+      // console.log("allData:"+ JSON.stringify(allData))
+      console.log("maxRanks:" + maxRanks);
+      let maxX = -Infinity; // 先初始化为负无穷，确保任何有限值都能比它大
+      let minX = Infinity; // 初始化为正无穷，确保任何有限值都能比它小
+      let maxY = -Infinity;
+      let minY = Infinity;
+      for (const p of allData) {
+        const x = p[0];
+        const y = p[1];
+        // 处理x值
+        if (x != null) { // 这里可以同时处理null和undefined情况
+          if (x > maxX) {
+            maxX = x;
+          }
+          if (x < minX) {
+            minX = x;
+          }
+        }
+        // 处理y值
+        if (y != null) {
+          if (y > maxY) {
+            maxY = y;
+          }
+          if (y < minY) {
+            minY = y;
+          }
+        }
+      }
+      console.log("maxX:" + maxX + ", maxY:" + maxY + ", minX:" + minX + ", minY:" + minY);
+
+      const rankSeries = populationData.map((rank, index) => {
+        const rankCount = maxRanks; // 总的 rank 数量
+        const hueStart = 120; // 起始颜色 (绿色)
+        const hueEnd = 0; // 结束颜色 (红色)
+        const hue = hueStart + ((hueEnd - hueStart) * index) / (rankCount - 1); // 线性插值
+        const color = `hsl(${hue}, 90%, 40%)`; // 生成 HSL 色值。色相、饱和度和亮度
+
+        return {
+          name: `Rank ${index}`,
+          type: "scatter",
+          data: rank.points.map((point) => [point.f1, point.f2]),
+          itemStyle: {color},
+        };
+      });
 
       const option = {
         title: {
@@ -201,25 +285,52 @@ export default {
           left: "center",
         },
         xAxis: {
-          name: "f1",
+          name: "F1",
+          type: "value",
+          min: minX,
+          max: maxX,
         },
         yAxis: {
-          name: "f2",
+          name: "F2",
+          type: "value",
+          min: minY,
+          max: maxY,
         },
         series: [
           {
             name: "解空间",
             type: "scatter",
             data: solutionData,
+            symbolSize: 11,
             itemStyle: {color: "lightgray"},
+            large: true,//针对大数据量的优化
           },
-          {
-            name: "当前种群",
-            type: "scatter",
-            data: populationData,
-            itemStyle: {color: "#a94826"},
-          },
+          ...rankSeries,
         ],
+        tooltip: {
+          trigger: 'item',
+          axisPointer: {
+            type: 'cross'
+          },
+          formatter: function (params) {
+            // params是包含了触发提示框的相关数据信息的对象
+            // 对于散点图（scatter类型），params.value是一个数组，包含了对应点的x和y值（这里对应f1和f2）
+            const f1 = params.value[0];
+            const f2 = params.value[1];
+            return `<b>F1:</b> ${f1}<br><b>F2:</b> ${f2}`;
+          }
+        },
+        // toolbox: {
+        //   right: 20,
+        //   feature: {
+        //     dataZoom: {}
+        //   }
+        // },
+        legend: {
+          orient: 'vertical',
+          right: 11
+        },
+        animation: false,
       };
 
       this.chartInstance.setOption(option);
@@ -238,4 +349,32 @@ export default {
 .el-form-item {
   margin-bottom: 20px;
 }
+
+.button-container {
+  display: flex;
+  justify-content: space-between; /* 让两个按钮均匀分布在两端，实现左右排列 */
+}
+
+.normal-button {
+  background-color: #ffffff;
+  color: #606266;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  font-size: 1rem;
+  width: 100%;
+  padding: 0.2rem 0.5rem; /* 按钮的内边距，可以根据需要进行调整 */;
+  height: 2.8rem;
+}
+
+.primary-button {
+  background-color: #0d539f;
+  color: #ffffff;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  font-size: 1rem;
+  width: 100%;
+  padding: 0.2rem 0.5rem; /* 按钮的内边距，可以根据需要进行调整 */;
+  height: 2.8rem
+}
+
 </style>

@@ -73,7 +73,10 @@ class ObjectiveVisualizer:
         self.funcs = funcs
         self.t = t  # 更新时间变量
         print("[ObjectiveVisualizer]准备计算目标函数值")
-        self.F1, self.F2 = self.calculate_objective_values(funcs, self.grids, t)
+        if self.visual_mode == 1:
+            self.F1, self.F2 = self.calculate_objective_values(funcs, self.grids, t)
+        elif self.visual_mode == 2:
+            self.points = self.calculate_objective_values(funcs, self.grids, t)  # 坐标点数组
         print(f"[ObjectiveVisualizer]目标函数值计算完成,t={t}")
 
     def generate_grid(self, variable_ranges, resolution):
@@ -93,9 +96,20 @@ class ObjectiveVisualizer:
         返回:
             list: 每个目标函数的值。
         """
-        if t is not None:
-            return [func(*grids, t) for func in funcs]
-        return [func(*grids) for func in funcs]
+        if self.visual_mode == 1:
+            if t is not None:
+                return [func(*grids, t) for func in funcs]
+            return [func(*grids) for func in funcs]
+        elif self.visual_mode == 2:
+            mesh_shape = grids[0].shape
+            grid_points = np.vstack([g.ravel() for g in grids]).T  # 将网格点展平为二维数组
+            if t is not None:
+                objectives = np.array([func(*pt, t) for pt in grid_points for func in funcs])
+            else:
+                objectives = np.array([func(*pt) for pt in grid_points for func in funcs])
+
+            # 将结果整形成二维坐标数组 [[f1, f2], ...]
+            return objectives.reshape(-1, len(funcs))  # 每行是一个解点，每列对应一个目标函数值
 
     def pareto_front(self, F1, F2, objectives):
         # 筛选Pareto前沿
@@ -186,17 +200,11 @@ class ObjectiveVisualizer:
             if self.save_gif:
                 self.gif_generator.add_frame(self.fig)
         elif self.visual_mode == 2:
-            # 获取解空间点
-            solution_points = {"F1": self.F1.tolist(), "F2": self.F2.tolist()}
-
-            # 按照 rank 获取当前种群数据
-            population_data = []
-            for rank, group in enumerate(individuals):
-                rank_data = {
-                    "rank": rank,
-                    "points": [{"f1": ind.objectives[0], "f2": ind.objectives[1]} for ind in group]
-                }
-                population_data.append(rank_data)
+            solution_points = self.points.tolist()  # 解空间点
+            population_data = [
+                {"rank": rank, "points": [{"f1": ind.objectives[0], "f2": ind.objectives[1]} for ind in group]}
+                for rank, group in enumerate(individuals)
+            ]
 
             # 推送数据到队列
             if self.queue:
@@ -205,8 +213,7 @@ class ObjectiveVisualizer:
                     "solution_points": solution_points,
                     "population_data": population_data
                 })
-
-            print(f"[ObjectiveVisualizer] Generation {generation} data 添加到队列成功.")
+            print(f"[ObjectiveVisualizer] Generation {generation} 数据已推送到队列.")
         else:
             print("[ObjectiveVisualizer] 未实现的可视化模式")
 

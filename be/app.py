@@ -59,6 +59,7 @@ def start():
         num_generations = data.get("num_generations", 100)
         crossover_rate = data.get("crossover_rate", 0.9)
         mutation_rate = data.get("mutation_rate", 0.01)
+        resolution = data.get("resolution", 100)
         # 打印调试信息
         print(f"Loaded funcs: {funcs}, variable_ranges: {variable_ranges}, is_dynamic: {is_dynamic}")
 
@@ -66,7 +67,7 @@ def start():
         visualizer = ObjectiveVisualizer(
             variable_ranges=variable_ranges,
             visual_mode=2,
-            resolution=100,
+            resolution=resolution,
             queue=visualization_queue)
         print("visualizer created.")
         threading.Thread(
@@ -88,7 +89,7 @@ def poll_visualization():
     if not visualization_queue.empty():
         data = visualization_queue.get()  # 获取并删除队列中的第一个元素
         # print(f"返回可视化数据, data: {data}")
-        print(f"返回可视化数据")
+        print(f"返回可视化数据,generation: {data['generation']}")
         return jsonify({"status": "success", "has_new_data": True, "data": data})
     else:
         print(f"没有可视化数据")
