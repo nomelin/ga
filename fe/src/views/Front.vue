@@ -97,7 +97,7 @@ export default {
         mutation_rate: 0.01,
         crossover_rate: 0.9,
         precision: 0.01,
-        poolingTime: 600,
+        poolingTime: 1000,
       },
       algorithmOptions: [
         {value: "nsga2", label: "NSGA-II"},
@@ -106,7 +106,7 @@ export default {
       funcFileOptions: [],
       chartInstance: null,
       intervalId: null,
-      frames: [],
+      frames: [],// 存放每一代的可视化数据
     };
   },
   mounted() {
@@ -229,40 +229,13 @@ export default {
       // console.log("solutionData:" + JSON.stringify(solutionData));
       // console.log("populationData:" + JSON.stringify(populationData));
 
-      const allData = [
-        ...solutionData,
-        ...populationData.flatMap((rank) => rank.points),
-      ];
-      console.log("数据量:" + allData.length);
+      // const allData = [
+      //   ...solutionData,
+      //   ...populationData.flatMap((rank) => rank.points),
+      // ];
+      // console.log("数据量:" + allData.length);
       // console.log("allData:"+ JSON.stringify(allData))
       console.log("maxRanks:" + maxRanks);
-      let maxX = -Infinity; // 先初始化为负无穷，确保任何有限值都能比它大
-      let minX = Infinity; // 初始化为正无穷，确保任何有限值都能比它小
-      let maxY = -Infinity;
-      let minY = Infinity;
-      for (const p of allData) {
-        const x = p[0];
-        const y = p[1];
-        // 处理x值
-        if (x != null) { // 这里可以同时处理null和undefined情况
-          if (x > maxX) {
-            maxX = x;
-          }
-          if (x < minX) {
-            minX = x;
-          }
-        }
-        // 处理y值
-        if (y != null) {
-          if (y > maxY) {
-            maxY = y;
-          }
-          if (y < minY) {
-            minY = y;
-          }
-        }
-      }
-      console.log("maxX:" + maxX + ", maxY:" + maxY + ", minX:" + minX + ", minY:" + minY);
 
       const rankSeries = populationData.map((rank, index) => {
         const rankCount = maxRanks; // 总的 rank 数量
@@ -279,61 +252,95 @@ export default {
         };
       });
 
-      const option = {
-        title: {
-          text: `目标优化第 ${data.generation + 1} 代`,
-          left: "center",
-        },
-        xAxis: {
-          name: "F1",
-          type: "value",
-          min: minX,
-          max: maxX,
-        },
-        yAxis: {
-          name: "F2",
-          type: "value",
-          min: minY,
-          max: maxY,
-        },
-        series: [
-          {
-            name: "解空间",
-            type: "scatter",
-            data: solutionData,
-            symbolSize: 11,
-            itemStyle: {color: "lightgray"},
-            large: true,//针对大数据量的优化
-          },
-          ...rankSeries,
-        ],
-        tooltip: {
-          trigger: 'item',
-          axisPointer: {
-            type: 'cross'
-          },
-          formatter: function (params) {
-            // params是包含了触发提示框的相关数据信息的对象
-            // 对于散点图（scatter类型），params.value是一个数组，包含了对应点的x和y值（这里对应f1和f2）
-            const f1 = params.value[0];
-            const f2 = params.value[1];
-            return `<b>F1:</b> ${f1}<br><b>F2:</b> ${f2}`;
+      this.frames[data.generation] = {
+        title: `目标优化第 ${data.generation + 1} 代`,
+        solutionData,
+        rankSeries,
+      };
+
+      const timelineData = this.frames.map((_, index) => `第${index + 1}代`);
+      const timelineOptions = this.frames.map((frame, index) => {
+        let maxX = -Infinity, minX = Infinity, maxY = -Infinity, minY = Infinity;
+
+        // 动态计算该帧的数据范围
+        const allData = [
+          ...frame.solutionData,
+          ...frame.rankSeries.flatMap((rank) => rank.data),
+        ];
+        for (const p of allData) {
+          const x = p[0], y = p[1];
+          if (x != null) {
+            if (x > maxX) maxX = x;
+            if (x < minX) minX = x;
           }
+          if (y != null) {
+            if (y > maxY) maxY = y;
+            if (y < minY) minY = y;
+          }
+        }
+
+        // 提取当前帧的图例项
+        const legendData = [
+          "解空间", // 固定的解空间图例名称
+          ...frame.rankSeries.map((rank) => rank.name), // 动态生成的 Rank 图例名称
+        ];
+
+        return {
+          title: {text: frame.title},
+          xAxis: {name: "F1", type: "value", min: minX, max: maxX},
+          yAxis: {name: "F2", type: "value", min: minY, max: maxY},
+          legend: {data: legendData, orient: "vertical", right: 11}, // 动态更新 legend
+          series: [
+            {
+              name: "解空间",
+              type: "scatter",
+              data: frame.solutionData,
+              symbolSize: 11,
+              itemStyle: {color: "lightgray"},
+              large: true,
+            },
+            ...frame.rankSeries,
+          ],
+        };
+      });
+
+      const option = {
+        baseOption: {
+          timeline: {
+            axisType: "category",
+            data: timelineData,
+            autoPlay: false,
+            playInterval: 1000,
+            tooltip: {
+              formatter: (p) => `${p.name}`,
+            },
+          },
+          title: {left: "center"},
+          xAxis: {name: "F1", type: "value"}, // 初始设置，具体值在 options 中动态更新
+          yAxis: {name: "F2", type: "value"},
+          tooltip: {
+            trigger: "item",
+            axisPointer: {
+              type: "cross",
+            },
+            formatter: (params) =>
+                `<b>F1:</b> ${params.value[0]}<br><b>F2:</b> ${params.value[1]}`,
+          },
+          // legend: {orient: "vertical", right: 11},
+          animation: false,
         },
-        // toolbox: {
-        //   right: 20,
-        //   feature: {
-        //     dataZoom: {}
-        //   }
-        // },
-        legend: {
-          orient: 'vertical',
-          right: 11
-        },
-        animation: false,
+        options: timelineOptions,
       };
 
       this.chartInstance.setOption(option);
+      const latestIndex = this.frames.length - 1;
+      this.chartInstance.setOption({
+        baseOption: {
+          timeline: {
+            currentIndex: latestIndex, // 设置为最新的帧索引
+          },
+        },
+      });
     },
   },
   beforeDestroy() {
