@@ -1,3 +1,4 @@
+from lib import global_var
 from lib.SimilarityDetector import SimilarityDetector
 import math
 from lib.ga_basic import *
@@ -36,6 +37,8 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
 
+    global_var.set_algorithm_running(True)  # 设置标志位，表示算法正在运行
+
     # 初始化 t 为 0
     if dynamic_funcs:
         t = 0
@@ -61,6 +64,9 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     for generation in range(num_generations):
         print(f"[nsga-ii] 第 {generation + 1} 代")
 
+        if not global_var.get_algorithm_running():  # 检查标志位
+            print("[nsga-ii]NSGA-II 被终止。")
+            break
         # 检查是否是分段边界，如果是，则需要更换目标函数
         if generation in funcs_dict:
             if dynamic_funcs:

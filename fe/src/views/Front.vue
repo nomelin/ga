@@ -277,6 +277,7 @@ export default {
     startAlgorithm() {
       this.stopAlgorithm(); // 停止算法并清除缓存，结束轮询
       this.clearChart(); // 清除图表
+      this.frames = []; // 清空帧数据
       if (!this.form.funcFile) {
         this.$message.error("请选择函数文件！");
         return;
@@ -291,6 +292,8 @@ export default {
         mutation_rate: this.form.mutation_rate,
         crossover_rate: this.form.crossover_rate,
         precision: this.form.precision,
+        use_crossover_and_differential_mutation: this.form.use_diff_mutation,
+        use_prediction: this.form.use_predict_model,
       }).then((res) => {
         if (res.status === "success") {
           this.$message.success("算法已启动！");
