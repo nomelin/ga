@@ -248,7 +248,7 @@ def dynamic_selection_strategy_based_on_distance(population, generation, num_gen
     print(f"Average distance: {avg_distance}")
 
     # 根据平均距离切换选择策略
-    if avg_distance > 1.0:  # 较大值表示多样性较高
+    if avg_distance > 1.5:  # 较大值表示多样性较高
         if generation < num_generations * 0.3:
             return 'crowding_distance_selection'  # 初期阶段，平衡收敛与多样性
         else:
