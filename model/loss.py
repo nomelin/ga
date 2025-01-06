@@ -26,12 +26,14 @@ def diversity_loss(predicted):
         torch.Tensor: 多样性损失值。
     """
     dist_matrix = torch.cdist(predicted, predicted, p=2)  # 计算欧几里得距离矩阵
-    dist_matrix.fill_diagonal_(float('inf'))    # 对角线距离为 0，忽略自身最近距离
+    # PyTorch 的自动微分机制要求计算图中的变量不可在梯度追踪过程中被修改。
+    mask = torch.eye(dist_matrix.size(0), device=dist_matrix.device).bool()  # 对角线掩码
+    dist_matrix = dist_matrix.masked_fill(mask, float('inf'))  # 替换对角线为 inf
     min_distances = dist_matrix.min(dim=1).values
     return -min_distances.mean()  # 取负值以鼓励更大的距离
 
 
-def total_loss(predicted, target, alpha=1.0, beta=0.1):
+def calculate_loss(predicted, target, alpha=1.0, beta=0.1):
     """
     总损失函数，结合匹配损失和多样性损失。
     参数:
@@ -45,4 +47,5 @@ def total_loss(predicted, target, alpha=1.0, beta=0.1):
     """
     match_loss = matching_loss(predicted, target)
     div_loss = diversity_loss(predicted)
+    # print(f"match_loss: {match_loss}, div_loss: {div_loss}, total_loss: {alpha * match_loss + beta * div_loss}")
     return alpha * match_loss + beta * div_loss

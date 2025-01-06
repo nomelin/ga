@@ -2,7 +2,7 @@ from lib import global_var
 from lib.SimilarityDetector import SimilarityDetector
 import math
 from lib.ga_basic import *
-
+from lib.AdaptabilityMetric import *
 
 def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
                mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
@@ -23,7 +23,6 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         regeneration_ratio (float): 环境变化时重新生成的种群比例。
         use_prediction (bool): 是否使用预测功能（默认为 False）。
         use_crossover_and_differential_mutation: 是否使用差分交叉函数，默认为False
-        F: 差分算子
         例如：
         def f1(x1, x2, t): return x1 ** 2 + x2 ** 2 + a(t)*x1 + b(t)*x2
         def a(t): return t
@@ -65,6 +64,8 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     # 初始化相似性检测器（仅在动态环境下启用）
     similarity_detector = SimilarityDetector(threshold=0.1) if dynamic_funcs else None
     previous_objectives = None
+    # 初始化适应性度量器
+    adaptability_metric = AdaptabilityMetric(threshold=0.1)
 
     # 迭代进化过程
     for generation in range(num_generations):
@@ -88,16 +89,22 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
 
+
             # 检查是否发生环境变化
             current_objectives = np.array(
                 [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
+            # 打印当前和上一代的目标函数值
+            print(f"[nsga-ii] 当前目标函数值: {current_objectives}")
+            print(f"[nsga-ii] 上一代目标函数值: {previous_objectives}")
+
+            # 在第一代时，初始化 previous_objectives 为全零目标值
+            if previous_objectives is None:
+                previous_objectives = np.zeros_like(current_objectives)  # 将目标值初始化为全零数组
+                print(f"[nsga-ii] 第一代，初始化 previous_objectives 为全零目标值")
             if previous_objectives is not None and similarity_detector.detect(current_objectives, previous_objectives):
                 print(f"[nsga-ii] 检测到环境变化，重新生成种群")
                 regeneration_ratio = similarity_detector.calculate_retention_ratio(regeneration_ratio, 1.0)
-                # 计算 MPS
-                mps = np.mean(np.linalg.norm(current_objectives - previous_objectives, axis=1))
-                mps_values.append(mps)  # 记录 MPS
-                print(f"[nsga-ii] MPS = {mps}")
+
 
                 # 记录 Reaction Time 起点
                 reaction_start_gen = generation
@@ -114,7 +121,11 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                     print("[nsga-ii] 使用随机生成代替预测功能")
                     regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
                                                                            variable_ranges)
-
+                # 计算适应性度量
+                adaptability_score = adaptability_metric.calculate_adaptation(current_objectives=current_objectives,
+                                                                                  previous_objectives=previous_objectives,
+                                                                                  generation=generation)
+                print(f"[nsga-ii] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
                 # 将重新生成的种群与当前种群合并
                 population[:int(pop_size * regeneration_ratio)] = regenerated_population
 
