@@ -3,6 +3,7 @@ from lib.SimilarityDetector import SimilarityDetector
 import math
 from lib.ga_basic import *
 from lib.AdaptabilityMetric import *
+from lib.DiversityMetric import *
 
 def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
                mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
@@ -66,6 +67,8 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     previous_objectives = None
     # 初始化适应性度量器
     adaptability_metric = AdaptabilityMetric(threshold=0.1)
+    # 初始化动态多样性度量对象
+    diversity_metric = DiversityMetric()
 
     # 迭代进化过程
     for generation in range(num_generations):
@@ -97,6 +100,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             print(f"[nsga-ii] 当前目标函数值: {current_objectives}")
             print(f"[nsga-ii] 上一代目标函数值: {previous_objectives}")
 
+
             # 在第一代时，初始化 previous_objectives 为全零目标值
             if previous_objectives is None:
                 previous_objectives = np.zeros_like(current_objectives)  # 将目标值初始化为全零数组
@@ -121,18 +125,24 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                     print("[nsga-ii] 使用随机生成代替预测功能")
                     regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
                                                                            variable_ranges)
-                # 计算适应性度量
-                adaptability_score = adaptability_metric.calculate_adaptation(current_objectives=current_objectives,
-                                                                                  previous_objectives=previous_objectives,
-                                                                                  generation=generation)
-                print(f"[nsga-ii] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
                 # 将重新生成的种群与当前种群合并
                 population[:int(pop_size * regeneration_ratio)] = regenerated_population
-
+            # 计算适应性度量
+            adaptability_score = adaptability_metric.calculate_adaptation(current_objectives=current_objectives,
+                                                                      previous_objectives=previous_objectives,
+                                                                      generation=generation)
+            print(f"[nsga-ii] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
             # 更新当前目标函数值
             previous_objectives = current_objectives
 
-
+        # 计算上一代和当前代的多样性变化
+        previous_diversity = diversity_metric.calculate_population_diversity(population, variable_ranges,
+                                                                                 num_bits)  # 计算上一代的多样性
+        current_diversity = diversity_metric.calculate_population_diversity(offspring, variable_ranges,
+                                                                                num_bits)  # 计算当前代的多样性
+        # 计算多样性变化
+        diversity_change =abs(current_diversity - previous_diversity) / previous_diversity
+        print(f"[nsga-ii] 第 {generation + 1} 代的多样性变化: {diversity_change:.4f}")
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
@@ -159,7 +169,6 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
             offspring = crossover_and_differential_mutation(offspring, F=F,mutation_rate=mutation_rate,crossover_rate=crossover_rate,generation=generation,
                                                             variable_ranges=variable_ranges, precision=precision, pop_size=pop_size,funcs_dict=funcs_dict,t=t)
-
         # 更新 t
         if dynamic_funcs:
             t += 1
@@ -271,7 +280,6 @@ def dynamic_selection_strategy_based_on_distance(population, generation, num_gen
     """
     # 计算种群的平均距离
     avg_distance = calculate_population_average_distance(population, variable_ranges, precision)
-    print(f"Average distance: {avg_distance}")
 
     # 根据平均距离切换选择策略
     if avg_distance > 5.0:  # 较大值表示多样性较高
