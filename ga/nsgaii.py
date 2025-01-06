@@ -1,9 +1,12 @@
+from flask_cors.core import FLASK_CORS_EVALUATED
+
 from lib import global_var
 from lib.ga_basic import *
-
-
+from lib.AdaptabilityMetric import *
+from lib.DiversityMetric import *
+from lib.SimilarityDetector import *
 def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
-          mutation_rate=0.01, dynamic_funcs=False):
+          mutation_rate=0.01, dynamic_funcs=False,regeneration_ratio=0.2,use_prediction=False):
     """
     NSGA-II 算法主过程，支持动态目标函数。
 
@@ -15,6 +18,8 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
         pop_size (int): 种群大小，默认值为 100。
         num_generations (int): 迭代次数，默认值为 50。
         dynamic_funcs (bool): 是否使用动态目标函数，默认值为 False。
+        regeneration_ratio (float): 环境变化时重新生成的种群比例。
+        use_prediction (bool): 是否使用预测功能(默认为 False)
         例如：
         def f1(x1, x2, t): return x1 ** 2 + x2 ** 2 + a(t)*x1 + b(t)*x2
         def a(t): return t
@@ -47,7 +52,13 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     fronts = [ind for front in fronts for ind in front]
     # 使用选择、交叉和变异生成子代种群
     offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
-
+    # 初始化相似性检测器（仅在动态环境下启用）
+    similarity_detector = SimilarityDetector(threshold=0.1) if dynamic_funcs else None
+    previous_objectives = None
+    # 初始化适应性度量器
+    adaptability_metric = AdaptabilityMetric(threshold=0.1)
+    # 初始化动态多样性度量对象
+    diversity_metric = DiversityMetric()
     # 迭代进化过程
     for generation in range(num_generations):
         print(f"[nsga-ii] 第 {generation + 1} 代")
@@ -70,6 +81,50 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
 
+            # 检查是否发生环境变化
+            current_objectives = np.array(
+                [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
+            # 打印当前和上一代的目标函数值
+            print(f"[nsga-ii] 当前目标函数值: {current_objectives}")
+            print(f"[nsga-ii] 上一代目标函数值: {previous_objectives}")
+
+            # 在第一代时，初始化 previous_objectives 为全零目标值
+            if previous_objectives is None:
+                previous_objectives = np.zeros_like(current_objectives)  # 将目标值初始化为全零数组
+                print(f"[nsga-ii] 第一代，初始化 previous_objectives 为全零目标值")
+            if previous_objectives is not None and similarity_detector.detect(current_objectives, previous_objectives):
+                print(f"[nsga-ii] 检测到环境变化，重新生成种群")
+                regeneration_ratio = similarity_detector.calculate_retention_ratio(regeneration_ratio, 1.0)
+
+                # 重新生成一定比例的种群
+                if use_prediction:
+                    # 使用预测功能（暂时使用随机生成代替）
+                    print("[nsga-ii] 使用预测功能生成种群")
+                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
+                                                                           variable_ranges)
+                else:
+                    # 使用随机生成代替
+                    print("[nsga-ii] 使用随机生成代替预测功能")
+                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
+                                                                           variable_ranges)
+                # 将重新生成的种群与当前种群合并
+                population[:int(pop_size * regeneration_ratio)] = regenerated_population
+            # 计算适应性度量
+            adaptability_score = adaptability_metric.calculate_adaptation(current_objectives=current_objectives,
+                                                                              previous_objectives=previous_objectives,
+                                                                              generation=generation)
+            print(f"[nsga-ii] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
+            # 更新当前目标函数值
+            previous_objectives = current_objectives
+
+        # 计算上一代和当前代的多样性变化
+        previous_diversity = diversity_metric.calculate_population_diversity(population, variable_ranges,
+                                                                                 num_bits)  # 计算上一代的多样性
+        current_diversity = diversity_metric.calculate_population_diversity(offspring, variable_ranges,
+                                                                                num_bits)  # 计算当前代的多样性
+        # 计算多样性变化
+        diversity_change = abs(current_diversity - previous_diversity) / previous_diversity
+        print(f"[nsga-ii] 第 {generation + 1} 代的多样性变化: {diversity_change:.4f}")
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 

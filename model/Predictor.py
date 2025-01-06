@@ -5,6 +5,8 @@ from model.PopulationPredictorLSTM import load_model, PopulationPredictorLSTM
 from model.train import load_population_data
 
 
+
+
 def predict(model, x, device='cuda'):
     """
     使用模型预测种群数据。

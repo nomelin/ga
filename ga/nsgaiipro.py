@@ -1,15 +1,11 @@
-from keras.src.saving import load_model
-
-from lib import global_var
-from lib.SimilarityDetector import SimilarityDetector
 import math
-from lib.ga_basic import *
-from lib.AdaptabilityMetric import *
-from lib.DiversityMetric import *
-from model import *
-from model.PopulationPredictorLSTM import PopulationPredictorLSTM
+
 import torch
 
+from lib import global_var
+from lib.AdaptabilityMetric import *
+from lib.DiversityMetric import *
+from lib.SimilarityDetector import SimilarityDetector
 from model.Predictor import predict
 
 
@@ -17,7 +13,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
                regeneration_ratio=0.2, use_prediction=False, model=None):
     """
-    NSGA-II 算法主过程，支持动态目标函数，并集成环境变化检测和种群预测功能。
+    naga-ii-pro 算法主过程，支持动态目标函数，并集成环境变化检测和种群预测功能。
 
     参数:
         funcs_dict (dict): 轮次 -> 目标函数列表及其方向。
@@ -59,6 +55,8 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     reaction_start_gen = None  # 记录 Reaction Time 起点
     reached_threshold = False  # 是否达到 Reaction Time 的目标
 
+    timeStepPopulations = []  # 用于记录前3代种群，由于预测
+
     # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
@@ -80,10 +78,10 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
 
     # 迭代进化过程
     for generation in range(num_generations):
-        print(f"[nsga-ii] 第 {generation + 1} 代")
+        print(f"[naga-ii-pro] 第 {generation + 1} 代")
 
         if not global_var.get_algorithm_running():  # 检查标志位
-            print("[nsga-ii]NSGA-II 被终止。")
+            print("[naga-ii-pro]naga-ii-pro 被终止。")
             break
         # 检查是否是分段边界，如果是，则需要更换目标函数
         if generation in funcs_dict:
@@ -91,79 +89,68 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                 t = 0  # 分段时重置 t 为 0
             current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
             print(
-                f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
+                f"[naga-ii-pro] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
-            print(f"[nsga-ii] 刷新解空间")
+            print(f"[naga-ii-pro] 刷新解空间")
 
         # 如果使用动态目标函数，每代都重新计算解空间，并进行环境变化检测
         if dynamic_funcs:
-            print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
+            print(f"[naga-ii-pro] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
-
 
             # 检查是否发生环境变化
             current_objectives = np.array(
                 [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
             # 打印当前和上一代的目标函数值
-            print(f"[nsga-ii] 当前目标函数值: {current_objectives}")
-            print(f"[nsga-ii] 上一代目标函数值: {previous_objectives}")
-
+            # print(f"[naga-ii-pro] 当前目标函数值: {current_objectives}")
+            # print(f"[naga-ii-pro] 上一代目标函数值: {previous_objectives}")
 
             # 在第一代时，初始化 previous_objectives 为全零目标值
             if previous_objectives is None:
                 previous_objectives = np.zeros_like(current_objectives)  # 将目标值初始化为全零数组
-                print(f"[nsga-ii] 第一代，初始化 previous_objectives 为全零目标值")
+                print(f"[naga-ii-pro] 第一代，初始化 previous_objectives 为全零目标值")
             if previous_objectives is not None and similarity_detector.detect(current_objectives, previous_objectives):
-                print(f"[nsga-ii] 检测到环境变化，重新生成种群")
+                print(f"[naga-ii-pro] 检测到环境变化，重新生成种群")
                 regeneration_ratio = similarity_detector.calculate_retention_ratio(regeneration_ratio, 1.0)
-
 
                 # 记录 Reaction Time 起点
                 reaction_start_gen = generation
                 reached_threshold = False
+                remainNum = int(pop_size * regeneration_ratio)  # 保留数量
+                regeneratedNum = pop_size - remainNum  # 重新生成数量
+                print(f"[naga-ii-pro] 种群保留数量: {remainNum}, 重新生成数量: {regeneratedNum}")
 
                 # 重新生成一定比例的种群
-                if use_prediction:
-                    # 使用预测功能（暂时使用随机生成代替）
-
-                    # 获取前三代的种群（已解码的个体）
-                    last_three_populations = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in
-                                              population[:3]]  # 取前三代
-
-                    # 将前三代的个体传递给 predict 函数进行预测
-                    output = predict(model, last_three_populations, device='cuda')  # 或者 'cpu'，取决于你使用的设备
-
-                    # 将预测的种群（解码后的个体）重新编码
-                    regenerated_population = [new_encode_individual(ind, variable_ranges, num_bits) for ind in
-                                              output]
-
+                if len(timeStepPopulations) == 3:
+                    if use_prediction and model is not None:
+                        print("[naga-ii-pro] 使用预测功能")
+                        regenerated_population = adapter_predict(model, timeStepPopulations, variable_ranges, num_bits,
+                                                                 regeneratedNum)
+                    else:
+                        # 使用随机生成代替
+                        print(f"[naga-ii-pro] 使用随机生成代替预测功能,use_prediction={use_prediction},model={model}")
+                        regenerated_population = adapter_initialize_population(regeneratedNum, num_bits,
+                                                                               variable_ranges)
                     # 将重新生成的种群与当前种群合并
-                    population[:int(pop_size * regeneration_ratio)] = regenerated_population
-
+                    population = population[:remainNum] + regenerated_population
                 else:
-                    # 使用随机生成代替
-                    print("[nsga-ii] 使用随机生成代替预测功能")
-
-                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
-                                                                           variable_ranges)
-                # 将重新生成的种群与当前种群合并
-                population[:int(pop_size * regeneration_ratio)] = regenerated_population
+                    print("[naga-ii-pro] 种群数量不足3，无法进行预测")
             # 计算适应性度量
             adaptability_score = adaptability_metric.calculate_adaptation(current_objectives=current_objectives,
-                                                                      previous_objectives=previous_objectives,
-                                                                      generation=generation)
-            print(f"[nsga-ii] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
+                                                                          previous_objectives=previous_objectives,
+                                                                          generation=generation)
+            print(f"[naga-ii-pro] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
             # 更新当前目标函数值
             previous_objectives = current_objectives
 
         # 计算上一代和当前代的多样性变化
         previous_diversity = diversity_metric.calculate_population_diversity(population, variable_ranges,
-                                                                                 num_bits)  # 计算上一代的多样性
+                                                                             num_bits)  # 计算上一代的多样性
         current_diversity = diversity_metric.calculate_population_diversity(offspring, variable_ranges,
-                                                                                num_bits)  # 计算当前代的多样性
+                                                                            num_bits)  # 计算当前代的多样性
         # 计算多样性变化
-        diversity_change =abs(current_diversity - previous_diversity) / previous_diversity
-        print(f"[nsga-ii] 第 {generation + 1} 代的多样性变化: {diversity_change:.4f}")
+        diversity_change = abs(current_diversity - previous_diversity) / previous_diversity
+        print(f"[naga-ii-pro] 第 {generation + 1} 代的多样性变化: {diversity_change:.4f}")
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
 
@@ -182,14 +169,20 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         # 精英保留策略，从排序后的种群中选择 N 个个体，形成新的父代种群
         population = sorted_population[:pop_size]
 
+        timeStepPopulations.append(population[:100])  # 用于预测的种群数量为100
+        if len(timeStepPopulations) > 3:
+            timeStepPopulations.pop(0)  # 只记录前3代种群
+
         # 使用选择、交叉、变异生成新一代子代种群
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
         # 如果启用差分交叉变异，对子代进行差分交叉变异
         if use_crossover_and_differential_mutation:
-            print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
-            offspring = crossover_and_differential_mutation(offspring, F=F,mutation_rate=mutation_rate,crossover_rate=crossover_rate,generation=generation,
-                                                            variable_ranges=variable_ranges, precision=precision, pop_size=pop_size,funcs_dict=funcs_dict,t=t)
+            print(f"[naga-ii-pro] 使用差分变异，参数 F = {F}")
+            offspring = crossover_and_differential_mutation(offspring, F=F, mutation_rate=mutation_rate,
+                                                            crossover_rate=crossover_rate, generation=generation,
+                                                            variable_ranges=variable_ranges, precision=precision,
+                                                            pop_size=pop_size, funcs_dict=funcs_dict, t=t)
         # 更新 t
         if dynamic_funcs:
             t += 1
@@ -239,7 +232,6 @@ def crowding_distance_selection(population, num_select, funcs, variable_ranges, 
     return selected_population
 
 
-
 def tournament_selection(population, num_select=3, tournament_size=2):
     """
     锦标赛选择策略：通过锦标赛选择指定数量的个体。
@@ -268,7 +260,6 @@ def calculate_population_average_distance(population, variable_ranges, precision
     num_bits = [calculate_num_bits(r[0], r[1], precision) for r in variable_ranges]
     total_distance = 0
     num_individuals = len(population)
-
 
     # 计算每对个体之间的欧几里得距离
     for i in range(num_individuals):
@@ -355,8 +346,6 @@ def crossover_and_differential_mutation(
     var_min = [r[0] for r in variable_ranges]
     var_max = [r[1] for r in variable_ranges]
 
-
-
     while len(offspring) < pop_size:
         # 动态选择个体
         selected_strategy = dynamic_selection_strategy_based_on_distance(
@@ -382,7 +371,7 @@ def crossover_and_differential_mutation(
             # 触发差分变异，生成变异体
             donor = [decoded_a[i] + F * (decoded_b[i] - decoded_c[i]) for i in range(len(decoded_a))]
             donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
-            encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
+            encoded_donor = encode_individual(donor,variable_ranges, precision=precision)
         else:
             # 未触发差分变异，直接使用父代作为 donor
             encoded_donor = a.binary_string
@@ -601,7 +590,7 @@ class Individual:
 
 
 """
-适配器函数，用于适配 NSGA-II 算法的个体输入格式。
+适配器函数，用于适配 naga-ii-pro 算法的个体输入格式。
 """
 
 
@@ -623,6 +612,11 @@ def adapter_decode_individual(individual, variable_ranges, num_bits):
     return decoded_values
 
 
+def adapter_encode_individual(decoded_values, variable_ranges, num_bits):
+    encoded_str = encode_Individual(decoded_values, variable_ranges, num_bits)
+    return Individual(encoded_str)
+
+
 def adapter_calculate_objectives(individual, funcs, variable_ranges, num_bits, t):
     individual.objectives = calculate_objectives(individual.binary_string, funcs, variable_ranges, num_bits, t)
     return individual.objectives
@@ -638,3 +632,25 @@ def adapter_mutate(individual, mutation_rate=0.01):
     return Individual(mutated_str)
 
 
+def adapter_predict(model, x, variable_ranges, num_bits, needNum=100):
+    """
+    参数:
+        model (nn.Module): 预测模型。
+        x [3[100]]: 输入数据.
+        needNum:需要的个体数量
+    返回:
+        [Individual]: 预测的个体类
+    """
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    x_decoded = []
+    # 解码个体为小数形式
+    for i in range(len(x)):
+        x_decoded.append([])
+        for j in range(len(x[i])):
+            x_decoded[i].append(adapter_decode_individual(x[i][j], variable_ranges, num_bits))
+    predicted = predict(model, x_decoded, device)
+    # print(f"预测结果: {predicted}")
+    # 编码预测结果为个体
+    predicted_encoded = [adapter_encode_individual(predicted[i], variable_ranges, num_bits) for i in
+                         range(len(predicted))]
+    return predicted_encoded[:needNum]

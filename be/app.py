@@ -38,6 +38,7 @@ def load_pred_model():
     weight_path = "../model/weight/model.pth"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # 初始化模型
+    global model
     model = PopulationPredictorLSTM()
     # 加载模型权重
     load_model(model, weight_path, device)
