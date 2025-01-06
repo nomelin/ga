@@ -1,6 +1,8 @@
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import os
+
+import imageio
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 
 
 def plot_solution_sets(current_solutions, predicted_solutions, file_name="solution_sets.gif"):
@@ -62,10 +64,58 @@ def plot_solution_sets(current_solutions, predicted_solutions, file_name="soluti
     plt.show()
 
 
-# 示例用法
-current_solutions = [[1, 2], [3, 1], [2, 3], [4, 2]]
-predicted_solutions = [[1.2, 2.1], [3.1, 0.9], [2.2, 3.2], [4.1, 2.2]]
+def savetogif(current, predicted, file_name="solution_sets.gif"):
+    """
+    Save a sequence of current and predicted populations as a GIF.
 
+    Args:
+        current (list): A list of populations (each a list of individuals, each a 2D coordinate) representing the current state.
+        predicted (list): A list of populations (same format as current) representing the predicted state.
+        file_name (str): The name of the output GIF file. Default is "solution_sets.gif".
+    """
+    if len(current) != len(predicted):
+        raise ValueError("current and predicted must have the same length.")
 
-# 传入自定义文件名
-plot_solution_sets(current_solutions, predicted_solutions, "custom_solution_sets.gif")
+    # Directory to save temporary images
+    temp_dir = "temp_gif_frames"
+    os.makedirs(temp_dir, exist_ok=True)
+
+    temp_files = []
+
+    for t, (cur_pop, pred_pop) in enumerate(zip(current, predicted)):
+        print("-", end="", flush=True)
+        plt.figure(figsize=(6, 6))
+
+        # Plot current population
+        cur_pop = zip(*cur_pop)  # Transpose for easier plotting
+        plt.scatter(*cur_pop, color='blue', label='Current', alpha=0.7)
+
+        # Plot predicted population
+        pred_pop = zip(*pred_pop)  # Transpose for easier plotting
+        plt.scatter(*pred_pop, color='red', label='Predicted', alpha=0.7)
+
+        plt.title(f"Population Evolution - Step {t + 1}")
+        plt.xlabel("X Coordinate")
+        plt.ylabel("Y Coordinate")
+        plt.legend()
+        plt.grid(True)
+
+        # Save frame as temporary image
+        frame_path = os.path.join(temp_dir, f"frame_{t:03d}.png")
+        plt.savefig(frame_path)
+        temp_files.append(frame_path)
+        plt.close()
+
+    # Create GIF
+    with imageio.get_writer(file_name, mode='I', duration=0.5) as writer:
+        for file_path in temp_files:
+            image = imageio.imread(file_path)
+            writer.append_data(image)
+
+    # Clean up temporary files
+    for file_path in temp_files:
+        os.remove(file_path)
+
+    os.rmdir(temp_dir)
+    print(f"GIF saved as {file_name}")
+
