@@ -71,22 +71,7 @@ def calculate_num_bits(var_min, var_max, precision):
     num_bits = int(np.ceil(np.log2(range_size / precision)))
     return num_bits
 
-def encode_individual(individual, var_min, var_max, precision):
-    """
-    将个体中的所有浮点数值编码为二进制字符串并拼接。
 
-    参数:
-        individual (list of float): 要编码的个体列表，每个元素是浮点数。
-        var_min (float): 变量的最小值。
-        var_max (float): 变量的最大值。
-        precision (float): 期望的搜索精度（决定二进制位数）。
-
-    返回:
-        str: 拼接后的二进制字符串。
-    """
-    num_bits = calculate_num_bits(var_min, var_max, precision)
-    binary_string = ''.join([binary_encode(value, var_min, var_max, num_bits) for value in individual])
-    return binary_string
 
 def initialize_population(pop_size, num_bits, variable_ranges):
     """
@@ -118,6 +103,30 @@ def initialize_population(pop_size, num_bits, variable_ranges):
 # ======================
 # 遗传算法基本算子
 # ======================
+
+
+def encode_individual(individual, variable_ranges, precision):
+    """
+    将个体中的所有浮点数值编码为二进制字符串并拼接。
+
+    参数:
+        individual (list of float): 要编码的个体列表，每个元素是浮点数。
+        variable_ranges (list of tuple): 变量的范围列表，每个元素是一个二元组，表示最小值和最大值。
+        precision (float): 期望的搜索精度（决定二进制位数）。
+
+    返回:
+        str: 拼接后的二进制字符串。
+    """
+    binary_string = ''
+
+    # 遍历每个个体的维度及其对应的变量范围
+    for i, value in enumerate(individual):
+        var_min, var_max = variable_ranges[i]  # 对应维度的最小值和最大值
+        num_bits = calculate_num_bits(var_min, var_max, precision)  # 计算当前维度需要的二进制位数
+        binary_string += binary_encode(value, var_min, var_max, num_bits)  # 编码当前个体的值并添加到二进制字符串
+
+    return binary_string
+
 
 def decode_individual(individual, variable_ranges, num_bits):
     """
