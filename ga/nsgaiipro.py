@@ -1,9 +1,17 @@
+from keras.src.saving import load_model
+
 from lib import global_var
 from lib.SimilarityDetector import SimilarityDetector
 import math
 from lib.ga_basic import *
 from lib.AdaptabilityMetric import *
 from lib.DiversityMetric import *
+from model import *
+from model.PopulationPredictorLSTM import PopulationPredictorLSTM
+import torch
+
+from model.Predictor import predict
+
 
 def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
                mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
@@ -117,12 +125,25 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                 # 重新生成一定比例的种群
                 if use_prediction:
                     # 使用预测功能（暂时使用随机生成代替）
-                    print("[nsga-ii] 使用预测功能生成种群")
-                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
-                                                                           variable_ranges)
+
+                    # 获取前三代的种群（已解码的个体）
+                    last_three_populations = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in
+                                              population[:3]]  # 取前三代
+
+                    # 将前三代的个体传递给 predict 函数进行预测
+                    output = predict(model, last_three_populations, device='cuda')  # 或者 'cpu'，取决于你使用的设备
+
+                    # 将预测的种群（解码后的个体）重新编码
+                    regenerated_population = [new_encode_individual(ind, variable_ranges, num_bits) for ind in
+                                              output]
+
+                    # 将重新生成的种群与当前种群合并
+                    population[:int(pop_size * regeneration_ratio)] = regenerated_population
+
                 else:
                     # 使用随机生成代替
                     print("[nsga-ii] 使用随机生成代替预测功能")
+
                     regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
                                                                            variable_ranges)
                 # 将重新生成的种群与当前种群合并
@@ -615,3 +636,5 @@ def adapter_crossover(parent1, parent2, crossover_rate=0.9):
 def adapter_mutate(individual, mutation_rate=0.01):
     mutated_str = mutate(individual.binary_string, mutation_rate)
     return Individual(mutated_str)
+
+
