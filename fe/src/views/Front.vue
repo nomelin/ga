@@ -2,7 +2,7 @@
   <div style="display: flex; height: 100vh; padding: 20px; font-weight: bold;">
     <!-- 左侧区域 -->
     <div
-        style="width: 25%; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; border-right: 1px solid #ddd;">
+        style="width: 30%; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; border-right: 1px solid #ddd;">
       <!-- 表单部分 -->
       <div>
         <el-form :model="form" label-width="80px" style="width: 100%">
@@ -22,7 +22,7 @@
             </el-select>
           </el-form-item>
           <el-row>
-            <el-col :span="form.algorithm === 'nsga2'? 24 : 12">
+            <el-col :span="form.algorithm === 'nsga2'? 24 : 14">
               <el-form-item label="突变概率">
                 <el-input-number v-model="form.mutation_rate" :min="0" :max="1" :step="0.01" style="width: 100%"/>
               </el-form-item>
@@ -41,12 +41,12 @@
                 <el-input-number v-model="form.generations" :min="1" :max="200" style="width: 100%"/>
               </el-form-item>
             </el-col>
-            <el-col :span="12" v-if="form.algorithm === 'nsga2pro'">
+            <el-col :span="10" v-if="form.algorithm === 'nsga2pro'">
               <el-form-item label="使用差分变异">
                 <el-switch v-model="form.use_diff_mutation"/>
               </el-form-item>
               <el-form-item label="使用预测模型">
-                <el-switch v-model="form.use_predict_model"/>
+                <el-switch v-model="form.use_predict_model" @change="loadModel"/>
               </el-form-item>
             </el-col>
 
@@ -88,7 +88,9 @@
         <div class="button-container">
           <div style="color: #72767b"> gif渲染时间</div>
           <el-input-number v-model="gifChangeTime" :min="100" :max="2000" style="width: 50%"/>
-          <el-button class="normal-button" type="primary" @click="downLoadGifImg" plain style="margin-left: 10px;">下载Gif</el-button>
+          <el-button class="normal-button" type="primary" @click="downLoadGifImg" plain style="margin-left: 10px;">
+            下载Gif
+          </el-button>
         </div>
 
       </div>
@@ -152,6 +154,22 @@ export default {
         });
   },
   methods: {
+    loadModel() {
+      if (!this.form.use_predict_model) {
+        return;
+      }
+      console.log("加载模型");
+
+      this.$request.post("/loadModel").then((res) => {
+        if (res.status === "success") {
+          this.$message.success(res.message);
+        } else {
+          this.$message.error(res.message);
+        }
+      }).catch((err) => {
+        this.$message.error("模型加载失败：" + err.message);
+      });
+    },
     downLoadGifImg() {
       if (!this.chartInstance) {
         this.$message.error("不存在图表");

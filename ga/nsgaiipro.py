@@ -7,7 +7,7 @@ from lib.DiversityMetric import *
 
 def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
                mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
-               regeneration_ratio=0.2, use_prediction=False):
+               regeneration_ratio=0.2, use_prediction=False, model=None):
     """
     NSGA-II 算法主过程，支持动态目标函数，并集成环境变化检测和种群预测功能。
 
@@ -175,6 +175,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
 
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
+    print(f"mps = {np.mean(mps_values)}")
     return final_solutions
 
 
@@ -186,6 +187,7 @@ def random_selection(population, num_select):
     随机选择策略：从种群中随机选择指定数量的个体。
     """
     return random.sample(population, num_select)
+
 
 def crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions, t):
     """
@@ -228,6 +230,7 @@ def tournament_selection(population, num_select=3, tournament_size=2):
         selected.append(winner)
     return selected
 
+
 # 计算种群平均距离
 def calculate_population_average_distance(population, variable_ranges, precision):
     """
@@ -263,6 +266,7 @@ def calculate_population_average_distance(population, variable_ranges, precision
 
     return average_distance
 
+
 # 动态选择个体选择策略
 def dynamic_selection_strategy_based_on_distance(population, generation, num_generations, variable_ranges, precision):
     """
@@ -280,6 +284,7 @@ def dynamic_selection_strategy_based_on_distance(population, generation, num_gen
     """
     # 计算种群的平均距离
     avg_distance = calculate_population_average_distance(population, variable_ranges, precision)
+    print(f"Average distance: {avg_distance}")
 
     # 根据平均距离切换选择策略
     if avg_distance > 5.0:  # 较大值表示多样性较高
@@ -339,7 +344,8 @@ def crossover_and_differential_mutation(
         if selected_strategy == 'random_selection':
             selected = random_selection(population, num_select)
         elif selected_strategy == 'crowding_distance_selection':
-            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,t)  # 需要 funcs, variable_ranges, num_bits, directions, t
+            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,
+                                                   t)  # 需要 funcs, variable_ranges, num_bits, directions, t
         elif selected_strategy == 'tournament_selection':
             selected = tournament_selection(population, num_select, tournament_size)
 
