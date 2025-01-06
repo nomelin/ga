@@ -71,6 +71,7 @@ def calculate_num_bits(var_min, var_max, precision):
     num_bits = int(np.ceil(np.log2(range_size / precision)))
     return num_bits
 
+
 def encode_individual(individual, var_min, var_max, precision):
     """
     将个体中的所有浮点数值编码为二进制字符串并拼接。
@@ -87,6 +88,7 @@ def encode_individual(individual, var_min, var_max, precision):
     num_bits = calculate_num_bits(var_min, var_max, precision)
     binary_string = ''.join([binary_encode(value, var_min, var_max, num_bits) for value in individual])
     return binary_string
+
 
 def initialize_population(pop_size, num_bits, variable_ranges):
     """
@@ -142,6 +144,29 @@ def decode_individual(individual, variable_ranges, num_bits):
         decoded.append(binary_decode(bin_str, var_min, var_max, bits))
         start_index += bits
     return decoded
+
+
+def encode_Individual(decoded_vars, variable_ranges, num_bits):
+    """
+    将解码后的实数列表编码为二进制串。
+    参数:
+        decoded_vars (list of float): 解码后的实数列表。
+        variable_ranges (list of tuples): 每个变量的范围 [(var_min, var_max), ...]。
+        num_bits (list of int): 每个变量的二进制位数。
+
+    返回:
+        str: 编码后的二进制串。
+
+    示例:
+        >> encode_Individual([1.215686274509804, 0.2857142857142856], [(-2, 2), (-2, 2)], [8, 3])
+        '11001101100'
+    """
+    # print(f"decoded_vars: {decoded_vars}, variable_ranges: {variable_ranges}, num_bits: {num_bits}")
+    binary_string = ''.join(
+        binary_encode(var, var_min, var_max, bits)
+        for var, (var_min, var_max), bits in zip(decoded_vars, variable_ranges, num_bits)
+    )
+    return binary_string
 
 
 def calculate_objectives(individual, funcs, variable_ranges, num_bits, t):
@@ -213,3 +238,10 @@ def mutate(individual, mutation_rate=0.01):
         for bit in individual
     )
     return mutated
+
+
+if __name__ == '__main__':
+    a = encode_Individual([1.215686274509804, 0.2857142857142856], [(-10, 10), (-2, 2)], [15, 3])
+    print(a)
+    b = decode_individual(a, [(-5, 2), (-2, 2)], [8, 3])
+    print(b)
