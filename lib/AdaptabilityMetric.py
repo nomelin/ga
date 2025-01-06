@@ -51,6 +51,9 @@ class AdaptabilityMetric:
             current_objectives: 当前代种群的目标函数值
             return: True表示环境发生变化，False表示没有变化
         """
+        # 将目标函数值转换为 NumPy 数组
+        current_objectives = np.array(current_objectives)
+        previous_objectives = np.array(previous_objectives)
         # 使用MPS(均方根误差)来计算环境变化
         mps = np.mean(np.linalg.norm(current_objectives - previous_objectives, axis=1))
         print(f"[nsga-ii] 当前MPS: {mps}")
@@ -65,6 +68,9 @@ class AdaptabilityMetric:
             previous_objectives: 上一代种群的目标函数值
             return: 适应性分数
         """
+        # 将目标函数值转换为 NumPy 数组
+        current_objectives = np.array(current_objectives)
+        previous_objectives = np.array(previous_objectives)
         # 计算当前种群与上一代种群目标函数值的差异，作为适应性分数
         difference = np.mean(np.abs(current_objectives - previous_objectives))  # 按元素计算差异
         return difference
