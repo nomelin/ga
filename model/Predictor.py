@@ -1,6 +1,6 @@
 import torch
 
-from lib.plot_solution_sets import plot_solution_sets
+from lib.plot_solution_sets import savetogif
 from model.PopulationPredictorLSTM import load_model, PopulationPredictorLSTM
 from model.train import load_population_data
 
@@ -34,8 +34,13 @@ if __name__ == '__main__':
     # 加载模型权重
     load_model(model, weight_path, device)
     # model.to(device)
+    current = []
+    predicted = []
     for sample in samples:
         input, output = sample[0].cpu().numpy(), sample[1].cpu().numpy()
         pred_output = predict(model, input, device)
-        print(f"size of input: {input.shape}, size of output: {output.shape} , size of pred_output: {pred_output.shape}")
-        plot_solution_sets(output, pred_output)
+        print(
+            f"size of input: {input.shape}, size of output: {output.shape} , size of pred_output: {pred_output.shape}")
+        current.append(output)
+        predicted.append(pred_output)
+    savetogif(current, predicted)
