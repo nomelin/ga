@@ -88,8 +88,8 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
             current_objectives = np.array(
                 [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
             # 打印当前和上一代的目标函数值
-            print(f"[nsga-ii] 当前目标函数值: {current_objectives}")
-            print(f"[nsga-ii] 上一代目标函数值: {previous_objectives}")
+            # print(f"[nsga-ii] 当前目标函数值: {current_objectives}")
+            # print(f"[nsga-ii] 上一代目标函数值: {previous_objectives}")
 
             # 在第一代时，初始化 previous_objectives 为全零目标值
             if previous_objectives is None:
