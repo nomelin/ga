@@ -1,12 +1,14 @@
-from lib import global_var
-from lib.SimilarityDetector import SimilarityDetector
 import math
-from lib.ga_basic import *
+
+from lib import global_var
 from lib.AdaptabilityMetric import *
+from lib.SimilarityDetector import SimilarityDetector
+from lib.ga_basic import *
+
 
 def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
                mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
-               regeneration_ratio=0.2, use_prediction=False):
+               regeneration_ratio=0.2, use_prediction=False, model=None):
     """
     NSGA-II 算法主过程，支持动态目标函数，并集成环境变化检测和种群预测功能。
 
@@ -29,6 +31,8 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         def b(t): return sin(t)
         则这个函数就是参数随时间t变化的目标函数。
         如果启用动态函数，则每个函数都需要在末尾包含一个参数 t，不论是否使用。
+
+        model: 预测模型，如果使用预测功能，则需要传入模型。
 
     返回:
         list: 最终种群的解（经过解码）。
@@ -89,7 +93,6 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
 
-
             # 检查是否发生环境变化
             current_objectives = np.array(
                 [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
@@ -104,7 +107,6 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             if previous_objectives is not None and similarity_detector.detect(current_objectives, previous_objectives):
                 print(f"[nsga-ii] 检测到环境变化，重新生成种群")
                 regeneration_ratio = similarity_detector.calculate_retention_ratio(regeneration_ratio, 1.0)
-
 
                 # 记录 Reaction Time 起点
                 reaction_start_gen = generation
@@ -123,15 +125,14 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                                                                            variable_ranges)
                 # 计算适应性度量
                 adaptability_score = adaptability_metric.calculate_adaptation(current_objectives=current_objectives,
-                                                                                  previous_objectives=previous_objectives,
-                                                                                  generation=generation)
+                                                                              previous_objectives=previous_objectives,
+                                                                              generation=generation)
                 print(f"[nsga-ii] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
                 # 将重新生成的种群与当前种群合并
                 population[:int(pop_size * regeneration_ratio)] = regenerated_population
 
             # 更新当前目标函数值
             previous_objectives = current_objectives
-
 
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
@@ -157,8 +158,10 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         # 如果启用差分交叉变异，对子代进行差分交叉变异
         if use_crossover_and_differential_mutation:
             print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
-            offspring = crossover_and_differential_mutation(offspring, F=F,mutation_rate=mutation_rate,crossover_rate=crossover_rate,generation=generation,
-                                                            variable_ranges=variable_ranges, precision=precision, pop_size=pop_size,funcs_dict=funcs_dict,t=t)
+            offspring = crossover_and_differential_mutation(offspring, F=F, mutation_rate=mutation_rate,
+                                                            crossover_rate=crossover_rate, generation=generation,
+                                                            variable_ranges=variable_ranges, precision=precision,
+                                                            pop_size=pop_size, funcs_dict=funcs_dict, t=t)
 
         # 更新 t
         if dynamic_funcs:
@@ -178,6 +181,7 @@ def random_selection(population, num_select):
     随机选择策略：从种群中随机选择指定数量的个体。
     """
     return random.sample(population, num_select)
+
 
 def crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions, t):
     """
@@ -208,7 +212,6 @@ def crowding_distance_selection(population, num_select, funcs, variable_ranges, 
     return selected_population
 
 
-
 def tournament_selection(population, num_select=3, tournament_size=2):
     """
     锦标赛选择策略：通过锦标赛选择指定数量的个体。
@@ -219,6 +222,7 @@ def tournament_selection(population, num_select=3, tournament_size=2):
         winner = min(candidates, key=lambda ind: ind.rank)  # 非支配排序优先
         selected.append(winner)
     return selected
+
 
 # 计算种群平均距离
 def calculate_population_average_distance(population, variable_ranges, precision):
@@ -237,7 +241,6 @@ def calculate_population_average_distance(population, variable_ranges, precision
     total_distance = 0
     num_individuals = len(population)
 
-
     # 计算每对个体之间的欧几里得距离
     for i in range(num_individuals):
         for j in range(i + 1, num_individuals):
@@ -254,6 +257,7 @@ def calculate_population_average_distance(population, variable_ranges, precision
     average_distance = total_distance / num_pairs if num_pairs > 0 else 0
 
     return average_distance
+
 
 # 动态选择个体选择策略
 def dynamic_selection_strategy_based_on_distance(population, generation, num_generations, variable_ranges, precision):
@@ -322,8 +326,6 @@ def crossover_and_differential_mutation(
     var_min = [r[0] for r in variable_ranges]
     var_max = [r[1] for r in variable_ranges]
 
-
-
     while len(offspring) < pop_size:
         # 动态选择个体
         selected_strategy = dynamic_selection_strategy_based_on_distance(
@@ -332,7 +334,8 @@ def crossover_and_differential_mutation(
         if selected_strategy == 'random_selection':
             selected = random_selection(population, num_select)
         elif selected_strategy == 'crowding_distance_selection':
-            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,t)  # 需要 funcs, variable_ranges, num_bits, directions, t
+            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,
+                                                   t)  # 需要 funcs, variable_ranges, num_bits, directions, t
         elif selected_strategy == 'tournament_selection':
             selected = tournament_selection(population, num_select, tournament_size)
 
