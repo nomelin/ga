@@ -11,6 +11,7 @@ class SimilarityDetector:
         self.method = method
         self.threshold = threshold
         self.normalized_difference = 0.0  # 用于存储归一化差异值
+        self.max_difference = 1e-6  # 初始化一个很小的值，避免除以0
 
     def detect(self, current_population, previous_population):
         """
@@ -25,6 +26,9 @@ class SimilarityDetector:
             difference = self._euclidean_distance(current_population, previous_population)
         else:
             raise ValueError(f"Unsupported method: {self.method}")
+
+        # 更新最大差异值
+        self.max_difference = max(self.max_difference, difference)
 
         # 归一化差异并计算保留比例
         self.normalized_difference = self._normalize_difference(difference)
@@ -44,7 +48,9 @@ class SimilarityDetector:
 
     def _normalize_difference(self, difference):
         """对差异进行归一化，限制在 [0, 1] 范围内"""
-        return min(1.0, difference / self.threshold)
+        if self.max_difference == 0:
+            return 0.0
+        return min(1.0, difference / self.max_difference)
 
     def calculate_retention_ratio(self, min_ratio=0.2, max_ratio=1.0):
         """
@@ -55,5 +61,5 @@ class SimilarityDetector:
         """
         # 当归一化差异接近0时，保留比例接近最大；差异增大时，保留比例降低
         retention_ratio = max(min_ratio, max_ratio * (1 - self.normalized_difference))
-        print(f"Normalized difference: {self.normalized_difference:.4f}, Retention ratio: {retention_ratio:.4f},min_ratio: {min_ratio:.4f}, max_ratio: {max_ratio:.4f}")
+        print(f"Normalized difference: {self.normalized_difference:.4f}, Retention ratio: {retention_ratio:.4f}, min_ratio: {min_ratio:.4f}, max_ratio: {max_ratio:.4f}")
         return retention_ratio
