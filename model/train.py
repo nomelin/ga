@@ -2,7 +2,7 @@ import json
 
 import torch
 
-from model.PopulationPredictorLSTM import PopulationPredictorLSTM
+from model.PopulationPredictorLSTM import PopulationPredictorLSTM, save_model, load_model
 from model.loss import calculate_loss
 
 
@@ -24,6 +24,7 @@ def load_population_data(json_file):
         inputs = torch.tensor(sample[:3], dtype=torch.float32)  # 前 3 个时刻种群
         target = torch.tensor(sample[3], dtype=torch.float32)  # 目标种群
         samples.append((inputs, target))
+    print(f"Loaded {len(samples)} samples from {json_file}.")
     return samples
 
 
@@ -70,14 +71,23 @@ def train_model_no_batch(model, samples, epochs, alpha=1.0, beta=0.1, lr=1e-3, d
 
 
 if __name__ == '__main__':
-    json_file = '../data/optimal_solutions_dy1.json'
+    json_file = '../data/optimal_solutions_dy3.json'
     epochs = 50
     learning_rate = 1e-3
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 加载数据
     samples = load_population_data(json_file)
+    weight_path = "weight/model.pth"
 
     # 初始化模型
     model = PopulationPredictorLSTM()
+
+    if input("是否加载模型? (y/n) ") == 'y':
+        load_model(model, weight_path, device)
+
     train_model_no_batch(model, samples, epochs, lr=learning_rate, device=device)
+
+    print("Training finished.")
+    if input("是否保存模型? (y/n) ") == 'y':
+        save_model(model, weight_path)

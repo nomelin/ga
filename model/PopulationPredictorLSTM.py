@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -35,3 +36,30 @@ class PopulationPredictorLSTM(nn.Module):
         lstm_out = lstm_out[:, -1, :]  # 取最后一个时间步的输出
         output = self.fc(lstm_out)  # (num_individuals, output_dim)
         return output
+
+
+def save_model(model, file_path):
+    """
+    保存模型权重。
+    参数:
+        model (nn.Module): 要保存的模型。
+        file_path (str): 保存路径（包含文件名）。
+    """
+    torch.save(model.state_dict(), file_path)
+    print(f"Model weights saved to {file_path}")
+
+
+def load_model(model, file_path, device='cpu'):
+    """
+    加载模型权重。
+    参数:
+        model (nn.Module): 模型实例。
+        file_path (str): 保存权重的文件路径。
+        device (str): 加载模型的设备（如 'cpu' 或 'cuda'）。
+    返回:
+        nn.Module: 加载权重后的模型。
+    """
+    model.load_state_dict(torch.load(file_path))
+    model.to(device)
+    print(f"Model weights loaded from {file_path}")
+    return model
