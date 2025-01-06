@@ -52,7 +52,6 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
     fronts = [ind for front in fronts for ind in front]
     # 使用选择、交叉和变异生成子代种群
     offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
-    previous_objectives = None
     # 初始化适应性度量器
     adaptability_metric = AdaptabilityMetric(threshold=0.1)
     # 初始化动态多样性度量对象

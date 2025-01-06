@@ -1,6 +1,7 @@
 import json
 
 import torch
+from matplotlib import pyplot as plt
 
 from model.PopulationPredictorLSTM import PopulationPredictorLSTM, save_model, load_model
 from model.loss import calculate_loss
@@ -44,6 +45,8 @@ def train_model_no_batch(model, samples, epochs, alpha=1.0, beta=0.1, lr=1e-3, d
     print(f"Training on {device}...")
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
+    loss_history = []
+
     for epoch in range(epochs):
         total_loss = 0.0
 
@@ -67,12 +70,24 @@ def train_model_no_batch(model, samples, epochs, alpha=1.0, beta=0.1, lr=1e-3, d
 
             total_loss += loss.item()
 
-        print(f"----- Epoch {epoch + 1}/{epochs}, Loss: {total_loss / len(samples):.4f} -----")
+        avg_loss = total_loss / len(samples)
+        loss_history.append(avg_loss)
+        print(f"----- Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f} -----")
+    # 绘制损失曲线
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, epochs + 1), loss_history, label='Training Loss', color='blue')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Over Epochs')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig("training_loss_curve.png")
+    plt.show()
 
 
 if __name__ == '__main__':
     json_file = '../data/optimal_solutions_dy3.json'
-    epochs = 50
+    epochs = 100
     learning_rate = 1e-3
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
