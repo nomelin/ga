@@ -121,13 +121,9 @@ def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_
             # 更新当前目标函数值
             previous_objectives = current_objectives
 
-        # 计算上一代和当前代的多样性变化
-        previous_diversity = diversity_metric.calculate_population_diversity(population, variable_ranges,
-                                                                                 num_bits)  # 计算上一代的多样性
-        current_diversity = diversity_metric.calculate_population_diversity(offspring, variable_ranges,
-                                                                                num_bits)  # 计算当前代的多样性
         # 计算多样性变化
-        diversity_change = abs(current_diversity - previous_diversity) / previous_diversity
+        diversity_change = diversity_metric.calculate_population_diversity(offspring, variable_ranges,
+                                                                                num_bits)
         diversity_changes.append(diversity_change)  # 存储每代的多样性变化
         print(f"[nsga-ii] 第 {generation + 1} 代的多样性变化: {diversity_change:.4f}")
         # 合并父代和子代生成 2N 个体的种群
