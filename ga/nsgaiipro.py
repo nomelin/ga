@@ -155,6 +155,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
 
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
+    print(f"mps = {np.mean(mps_values)}")
     return final_solutions
 
 
