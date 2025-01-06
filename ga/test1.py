@@ -3,7 +3,7 @@ from lib.SimilarityDetector import SimilarityDetector
 import math
 from lib.ga_basic import *
 import json
-
+import os
 
 def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
                mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
@@ -92,6 +92,10 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         optimal_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
         all_optimal_solutions.append(optimal_solutions)
 
+    # 确保 data 文件夹存在
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
     # 将时间序列保存为 JSON 文件，每行四个解集
     formatted_data = []
     for i in range(3, len(all_optimal_solutions)):
@@ -103,7 +107,8 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         ]
         formatted_data.append(json_entry)
 
-    with open("optimal_solutions_dy1.json", "w") as file:
+    # 保存文件到 data 文件夹下
+    with open("data/optimal_solutions_dy3.json", "w") as file:
         json.dump(formatted_data, file, indent=4)
 
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
