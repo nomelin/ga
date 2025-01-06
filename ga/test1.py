@@ -1,151 +1,320 @@
 from lib import global_var
-from lib.LSTMPopulationPredictor import LSTMPopulationPredictor
-from lib.ga_basic import *
 from lib.SimilarityDetector import SimilarityDetector
+import math
+from lib.ga_basic import *
+import json
 
 
-def nsga2(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
-          mutation_rate=0.01, dynamic_funcs=False):
+def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100, num_generations=50, crossover_rate=0.9,
+               mutation_rate=0.01, dynamic_funcs=False, use_crossover_and_differential_mutation=False, F=0.5,
+               regeneration_ratio=0.2, use_prediction=False):
     """
-    NSGA-II 算法主过程，支持动态目标函数。
-
-    参数:
-        funcs_dict (dict): 轮次 -> 目标函数列表及其方向。
-                           例如 {0: [[f1, f2], ['min', 'min']], 10: [[f3, f4], ['max', 'min']]}。随时间变化的目标函数列表。
-        variable_ranges (list of tuples): 每个变量的取值范围。
-        precision (float): 期望的搜索精度，用于确定编码长度。
-        pop_size (int): 种群大小，默认值为 100。
-        num_generations (int): 迭代次数，默认值为 50。
-        dynamic_funcs (bool): 是否使用动态目标函数，默认值为 False。
-        例如：
-        def f1(x1, x2, t): return x1 ** 2 + x2 ** 2 + a(t)*x1 + b(t)*x2
-        def a(t): return t
-        def b(t): return sin(t)
-        则这个函数就是参数随时间t变化的目标函数。
-        如果启用动态函数，则每个函数都需要在末尾包含一个参数 t，不论是否使用。
-
-    返回:
-        list: 最终种群的解（经过解码）。
+    NSGA-II 算法主过程，支持动态目标函数，并集成环境变化检测和种群预测功能。
     """
-    global_var.set_algorithm_running(True)  # 设置标志位，表示算法正在运行
-    # 初始设定目标函数和方向
     current_funcs, current_directions = funcs_dict[0][0], funcs_dict[0][1]
-    # visualizer.reCalculate(current_funcs)
+    global_var.set_algorithm_running(True)
+    t = 0 if dynamic_funcs else None
 
-    # 初始化 t 为 0
-    if dynamic_funcs:
-        t = 0
-    else:
-        t = None
-    # 生成环境检测器
-    similarity_detector = SimilarityDetector(method="objective_difference", threshold=0.1)
+    mps_values = []
+    reaction_times = []
+    reaction_start_gen = None
+    reached_threshold = False
 
-    # 初始化 LSTM 预测器
-    lstm_predictor = LSTMPopulationPredictor(input_dim=len(variable_ranges), output_dim=len(variable_ranges),
-                                             window_size=3, population_size=pop_size)
-
-    # 初始化历史最优解集
-    historical_populations = []
-
-    # 生成初始种群并进行快速非支配排序
     num_bits = [calculate_num_bits(var_min, var_max, precision) for var_min, var_max in variable_ranges]
     population = adapter_initialize_population(pop_size, num_bits, variable_ranges)
 
     # 非支配排序
-    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions,
-                                     t)
-    # 展平种群
+    fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits, current_directions, t)
     fronts = [ind for front in fronts for ind in front]
-    # 使用选择、交叉和变异生成子代种群
     offspring = create_offspring(fronts, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
 
-    # 迭代进化过程
+    similarity_detector = SimilarityDetector(threshold=0.1) if dynamic_funcs else None
+    previous_objectives = None
+
+    # 用于保存最优解集的时间序列数据
+    all_optimal_solutions = []
+
     for generation in range(num_generations):
         print(f"[nsga-ii] 第 {generation + 1} 代")
 
-        if not global_var.get_algorithm_running():  # 检查标志位
-            print("[nsga-ii]NSGA-II 被终止。")
+        if not global_var.get_algorithm_running():
+            print("[nsga-ii] NSGA-II 被终止。")
             break
 
-        # 检查是否是分段边界，如果是，则需要更换目标函数
         if generation in funcs_dict:
             if dynamic_funcs:
-                t = 0  # 分段时重置 t 为 0
+                t = 0
             current_funcs, current_directions = funcs_dict[generation][0], funcs_dict[generation][1]
             print(
                 f"[nsga-ii] 分段, 更新目标函数和方向：第 {generation + 1} 代使用新目标 {current_funcs} 和方向 {current_directions}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
-            print(f"[nsga-ii] 刷新解空间")
-        # 如果使用动态目标函数，每代都重新计算解空间
+
         if dynamic_funcs:
             print(f"[nsga-ii] 动态函数，刷新解空间。t = {t}")
             visualizer.reCalculate(funcs=current_funcs, t=t)
-            # 计算当前种群的目标函数值
-            current_objectives = np.array([
-                adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population
-            ])
-            # 将当前种群中的最优帕累托前沿加入历史最优解集
-            historical_populations.append(population)
+            current_objectives = np.array(
+                [adapter_calculate_objectives(ind, current_funcs, variable_ranges, num_bits, t) for ind in population])
+            if previous_objectives is not None and similarity_detector.detect(current_objectives, previous_objectives):
+                print(f"[nsga-ii] 检测到环境变化，重新生成种群")
+                regeneration_ratio = similarity_detector.calculate_retention_ratio(regeneration_ratio, 1.0)
+                mps = np.mean(np.linalg.norm(current_objectives - previous_objectives, axis=1))
+                mps_values.append(mps)
+                print(f"[nsga-ii] MPS = {mps}")
+                reaction_start_gen = generation
+                reached_threshold = False
+                if use_prediction:
+                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
+                                                                           variable_ranges)
+                else:
+                    regenerated_population = adapter_initialize_population(int(pop_size * regeneration_ratio), num_bits,
+                                                                           variable_ranges)
+                population[:int(pop_size * regeneration_ratio)] = regenerated_population
+            previous_objectives = current_objectives
 
-            # 检测环境变化
-            if similarity_detector.detect(current_objectives):
-                print(f"[nsga-ii] 环境变化，更新 LSTM 预测器")  # 要使用前几个时刻的最优帕累托前沿来训练 LSTM 预测器
-
-                # 训练 LSTM 预测器
-                n_previous_generations = len(historical_populations)
-                effective_window_size = min(n_previous_generations, lstm_predictor.window_size)  # 实际窗口大小,防止窗口越界
-                # 获取最近 effective_window_size 代的最优解集作为滑动窗口数据
-                historical_fronts = historical_populations[-effective_window_size:]
-                # 对个体进行解码
-                historical_populations_decoded = [
-                    [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in front] for front in
-                    historical_fronts
-                ]
-                # 计算当前种群的最优解集
-                current_fronts = fast_non_dominated_sort(population, current_funcs, variable_ranges, num_bits,
-                                                         current_directions, t)
-                sorted_current_fronts = crowding_distance_sort(current_fronts)
-
-                current_fronts_decoded = [
-                    [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in front] for front in
-                    current_fronts
-                ]
-
-
-
-
-
-        # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
-
-        # 非支配排序
         fronts = fast_non_dominated_sort(combined_population, current_funcs, variable_ranges, num_bits,
                                          current_directions, t)
-        # 拥挤度排序
         sorted_population = crowding_distance_sort(fronts)
-
-        # 画点
         visualizer.draw_individuals_by_rank(sorted_population, generation)
-
-        # 展平种群
         sorted_population = [ind for front in sorted_population for ind in front]
-
-        # 精英保留策略，从排序后的种群中选择 N 个个体，形成新的父代种群
         population = sorted_population[:pop_size]
-
-        # 使用选择、交叉、变异生成新一代子代种群
         offspring = create_offspring(population, variable_ranges, pop_size, num_bits, crossover_rate, mutation_rate)
-
-        # 更新 t
+        if use_crossover_and_differential_mutation:
+            print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
+            offspring = crossover_and_differential_mutation(offspring, F=F, crossover_rate=crossover_rate,
+                                                            generation=generation,
+                                                            variable_ranges=variable_ranges, precision=precision,
+                                                            pop_size=pop_size, funcs_dict=funcs_dict, t=t)
         if dynamic_funcs:
             t += 1
 
-    # 返回最终种群的解
+        # 保存每一代的最优解集
+        optimal_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
+        all_optimal_solutions.append(optimal_solutions)
+
+    # 将时间序列保存为 JSON 文件，每行四个解集
+    formatted_data = []
+    for i in range(3, len(all_optimal_solutions)):
+        json_entry = [
+            all_optimal_solutions[i - 3],
+            all_optimal_solutions[i - 2],
+            all_optimal_solutions[i - 1],
+            all_optimal_solutions[i]
+        ]
+        formatted_data.append(json_entry)
+
+    with open("optimal_solutions_dy1.json", "w") as file:
+        json.dump(formatted_data, file, indent=4)
+
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
+    print(f"mps = {np.mean(mps_values)}")
     return final_solutions
 
 
 # ======================
+
+# 新增————————
+def random_selection(population, num_select):
+    """
+    随机选择策略：从种群中随机选择指定数量的个体。
+    """
+    return random.sample(population, num_select)
+
+
+def crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions, t):
+    """
+    基于拥挤度选择策略：优先选择拥挤距离较大的个体，维护种群多样性。
+    """
+    # 首先，进行非支配排序，将种群分成多个前沿
+    fronts = fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t)  # 获取非支配排序结果
+
+    # 对每个前沿进行拥挤度排序
+    sorted_fronts = crowding_distance_sort(fronts)
+
+    selected_population = []
+    remaining = num_select
+
+    # 选择个体，首先选择最前沿的个体，直到选满
+    for front in sorted_fronts:
+        if remaining <= 0:
+            break
+        if len(front) <= remaining:
+            selected_population.extend(front)
+            remaining -= len(front)
+        else:
+            # 如果当前前沿个体多于剩余需要的个体，则按拥挤度排序，选择拥挤度最大的个体
+            front_sorted_by_distance = sorted(front, key=lambda x: x.crowding_distance, reverse=True)
+            selected_population.extend(front_sorted_by_distance[:remaining])
+            remaining = 0
+
+    return selected_population
+
+
+def tournament_selection(population, num_select=3, tournament_size=2):
+    """
+    锦标赛选择策略：通过锦标赛选择指定数量的个体。
+    """
+    selected = []
+    for _ in range(num_select):
+        candidates = random.sample(population, tournament_size)
+        winner = min(candidates, key=lambda ind: ind.rank)  # 非支配排序优先
+        selected.append(winner)
+    return selected
+
+
+# 计算种群平均距离
+def calculate_population_average_distance(population, variable_ranges, precision):
+    """
+    基于决策变量（解码后的值）计算种群的平均欧几里得距离。
+
+    参数：
+        population (list): 当前种群，包含所有个体。
+        variable_ranges (list): 每个变量的取值范围。
+        precision (float): 编码精度。
+
+    返回：
+        float: 种群中所有个体之间的平均距离。
+    """
+    num_bits = [calculate_num_bits(r[0], r[1], precision) for r in variable_ranges]
+    total_distance = 0
+    num_individuals = len(population)
+
+    # 计算每对个体之间的欧几里得距离
+    for i in range(num_individuals):
+        for j in range(i + 1, num_individuals):
+            # 获取个体 i 和个体 j 的解码后的实数值
+            decoded_i = decode_individual(population[i].binary_string, variable_ranges, num_bits)
+            decoded_j = decode_individual(population[j].binary_string, variable_ranges, num_bits)
+
+            # 计算欧几里得距离
+            distance = math.sqrt(sum((decoded_i[k] - decoded_j[k]) ** 2 for k in range(len(decoded_i))))
+            total_distance += distance
+
+    # 计算平均距离
+    num_pairs = num_individuals * (num_individuals - 1) / 2  # 计算所有个体的距离对数
+    average_distance = total_distance / num_pairs if num_pairs > 0 else 0
+
+    return average_distance
+
+
+# 动态选择个体选择策略
+def dynamic_selection_strategy_based_on_distance(population, generation, num_generations, variable_ranges, precision):
+    """
+    基于种群的平均距离来动态选择个体选择策略。
+
+    参数：
+        population (list): 当前种群，包含所有个体。
+        generation (int): 当前代数。
+        num_generations (int): 最大代数。
+        variable_ranges (list): 每个变量的取值范围。
+        precision (float): 编码精度。
+
+    返回：
+        str: 当前选择的个体选择策略。
+    """
+    # 计算种群的平均距离
+    avg_distance = calculate_population_average_distance(population, variable_ranges, precision)
+    print(f"Average distance: {avg_distance}")
+
+    # 根据平均距离切换选择策略
+    if avg_distance > 2.0:  # 较大值表示多样性较高
+        if generation < num_generations * 0.3:
+            return 'crowding_distance_selection'  # 初期阶段，平衡收敛与多样性
+        else:
+            return 'tournament_selection'  # 后期阶段，加速收敛
+    else:  # 如果种群多样性较低，增大收敛力度
+        return 'tournament_selection'  # 加速收敛
+
+
+# 差分变异函数
+def crossover_and_differential_mutation(
+        population,
+        F=0.5,
+        crossover_rate=0.9,
+        generation=None,
+        num_generations=50,
+        num_select=3,
+        tournament_size=2,
+        variable_ranges=None,
+        precision=None,
+        pop_size=None,
+        funcs_dict=None,
+        t=None,
+):
+    """
+    差分交叉变异操作，先进行差分变异，再根据交叉概率进行交叉操作。
+
+    参数:
+        population (list): 当前种群。
+        F (float): 差分放缩因子，控制步长。
+        crossover_rate (float): 交叉概率，控制交叉操作的发生。
+        generation: 当前代数
+        num_generation: 最大迭代次数
+        num_select (int): 选择的个体数量，默认为3。
+        variable_ranges (list): 每个变量的取值范围。
+        precision (float): 编码精度。
+        pop_size (int): 需要生成的个体数量。
+
+    返回:
+        list: 包含多个变异和交叉后的新个体的列表。
+    """
+    funcs, directions = funcs_dict[0]  # 选择第一个优化问题（可以根据需要调整）
+    # 存储生成的变异和交叉个体
+    offspring = []
+    # 基于种群的平均距离动态选择个体选择策略
+    selected_strategy = dynamic_selection_strategy_based_on_distance(population, generation, num_generations,
+                                                                     variable_ranges, precision)
+    # 动态计算 num_bits
+    num_bits = [calculate_num_bits(r[0], r[1], precision) for r in variable_ranges]
+
+    # 遍历 variable_ranges 获取 var_min 和 var_max 列表
+    var_min = [r[0] for r in variable_ranges]
+    var_max = [r[1] for r in variable_ranges]
+
+    # 生成 pop_size 个变异交叉后的个体
+    for _ in range(pop_size):
+        # 获取动态选择的策略
+        if selected_strategy == 'random_selection':
+            selected = random_selection(population, num_select)  # 只需要 population 和 num_select
+        elif selected_strategy == 'crowding_distance_selection':
+            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,
+                                                   t)  # 需要 funcs, variable_ranges, num_bits, directions, t
+        elif selected_strategy == 'tournament_selection':
+            selected = tournament_selection(population, num_select, tournament_size)  # 需要 tournament_size 参数（默认为 2）
+
+        # 将选中的个体分配给 a, b, c
+        a, b, c = selected
+
+        # 解码 a, b, c 的二进制字符串为实数值
+        decoded_a = decode_individual(a.binary_string, variable_ranges, num_bits)
+        decoded_b = decode_individual(b.binary_string, variable_ranges, num_bits)
+        decoded_c = decode_individual(c.binary_string, variable_ranges, num_bits)
+
+        # 进行差分变异运算，生成一个变异体
+        donor = [decoded_a[i] + F * (decoded_b[i] - decoded_c[i]) for i in range(len(decoded_a))]
+
+        # 限制 donor 的值在 variable_ranges 范围内
+        donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
+
+        # 使用 encode_individual 编码 donor
+        encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
+
+        # 进行交叉操作，结合 donor 和父代个体生成新的个体
+        if random.random() < crossover_rate:
+            # 执行交叉操作
+            offspring1, offspring2 = crossover(encoded_donor, a.binary_string, crossover_rate)
+        else:
+            # 如果不交叉，直接将变异体加入 offspring
+            offspring1 = encoded_donor
+            offspring2 = encoded_donor
+
+        # 将交叉后的个体加入 offspring 列表
+        offspring.append(Individual(binary_string=offspring1))
+        offspring.append(Individual(binary_string=offspring2))
+        print(len(offspring))
+
+    return offspring
+
 
 def fast_non_dominated_sort(population, funcs, variable_ranges, num_bits, directions, t):
     """
@@ -277,7 +446,7 @@ def create_offspring(population, variable_ranges, pop_size, num_bits, crossover_
     生成子代种群的函数，包括锦标赛选择、交叉和变异操作。
 
     参数:
-        population (list): 当前种群。
+        population (list[list]): 当前种群。
         variable_ranges (list of tuples): 每个变量的取值范围。
         pop_size (int): 种群大小。
         num_bits (int): 每个变量的二进制位数。
