@@ -146,7 +146,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
         # 如果启用差分交叉变异，对子代进行差分交叉变异
         if use_crossover_and_differential_mutation:
             print(f"[nsga-ii] 使用差分变异，参数 F = {F}")
-            offspring = crossover_and_differential_mutation(offspring, F=F,crossover_rate=crossover_rate,generation=generation,
+            offspring = crossover_and_differential_mutation(offspring, F=F,mutation_rate=mutation_rate,crossover_rate=crossover_rate,generation=generation,
                                                             variable_ranges=variable_ranges, precision=precision, pop_size=pop_size,funcs_dict=funcs_dict,t=t)
 
         # 更新 t
@@ -263,7 +263,7 @@ def dynamic_selection_strategy_based_on_distance(population, generation, num_gen
     print(f"Average distance: {avg_distance}")
 
     # 根据平均距离切换选择策略
-    if avg_distance > 2.0:  # 较大值表示多样性较高
+    if avg_distance > 5.0:  # 较大值表示多样性较高
         if generation < num_generations * 0.3:
             return 'crowding_distance_selection'  # 初期阶段，平衡收敛与多样性
         else:
@@ -276,7 +276,8 @@ def dynamic_selection_strategy_based_on_distance(population, generation, num_gen
 def crossover_and_differential_mutation(
         population,
         F=0.5,
-        crossover_rate=0.9,
+        mutation_rate=0.1,  # 差分变异概率
+        crossover_rate=0.9,  # 交叉概率
         generation=None,
         num_generations=50,
         num_select=3,
@@ -288,76 +289,70 @@ def crossover_and_differential_mutation(
         t=None,
 ):
     """
-    差分交叉变异操作，先进行差分变异，再根据交叉概率进行交叉操作。
-
+    差分交叉变异操作，加入突变概率控制差分变异运算。
     参数:
         population (list): 当前种群。
         F (float): 差分放缩因子，控制步长。
+        mutation_rate (float): 差分变异的概率。
         crossover_rate (float): 交叉概率，控制交叉操作的发生。
-        generation: 当前代数
-        num_generation: 最大迭代次数
+        generation: 当前代数。
+        num_generations: 最大迭代次数。
         num_select (int): 选择的个体数量，默认为3。
         variable_ranges (list): 每个变量的取值范围。
         precision (float): 编码精度。
         pop_size (int): 需要生成的个体数量。
-
     返回:
-        list: 包含多个变异和交叉后的新个体的列表。
+        list: 包含多个新个体的列表。
     """
-    funcs, directions = funcs_dict[0]  # 选择第一个优化问题（可以根据需要调整）
-    # 存储生成的变异和交叉个体
+    funcs, directions = funcs_dict[0]  # 假设第一个优化问题
     offspring = []
-    # 基于种群的平均距离动态选择个体选择策略
-    selected_strategy = dynamic_selection_strategy_based_on_distance(population, generation, num_generations,
-                                                                     variable_ranges, precision)
-    # 动态计算 num_bits
     num_bits = [calculate_num_bits(r[0], r[1], precision) for r in variable_ranges]
-
-    # 遍历 variable_ranges 获取 var_min 和 var_max 列表
     var_min = [r[0] for r in variable_ranges]
     var_max = [r[1] for r in variable_ranges]
 
-    # 生成 pop_size 个变异交叉后的个体
-    for _ in range(pop_size):
-        # 获取动态选择的策略
-        if selected_strategy == 'random_selection':
-            selected = random_selection(population, num_select)  # 只需要 population 和 num_select
-        elif selected_strategy == 'crowding_distance_selection':
-            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,
-                                                   t)  # 需要 funcs, variable_ranges, num_bits, directions, t
-        elif selected_strategy == 'tournament_selection':
-            selected = tournament_selection(population, num_select, tournament_size)  # 需要 tournament_size 参数（默认为 2）
 
-        # 将选中的个体分配给 a, b, c
+
+    while len(offspring) < pop_size:
+        # 动态选择个体
+        selected_strategy = dynamic_selection_strategy_based_on_distance(
+            population, generation, num_generations, variable_ranges, precision
+        )
+        if selected_strategy == 'random_selection':
+            selected = random_selection(population, num_select)
+        elif selected_strategy == 'crowding_distance_selection':
+            selected = crowding_distance_selection(population, num_select, funcs, variable_ranges, num_bits, directions,t)  # 需要 funcs, variable_ranges, num_bits, directions, t
+        elif selected_strategy == 'tournament_selection':
+            selected = tournament_selection(population, num_select, tournament_size)
+
+        # 获取选择的个体
         a, b, c = selected
 
-        # 解码 a, b, c 的二进制字符串为实数值
+        # 解码选择的个体
         decoded_a = decode_individual(a.binary_string, variable_ranges, num_bits)
         decoded_b = decode_individual(b.binary_string, variable_ranges, num_bits)
         decoded_c = decode_individual(c.binary_string, variable_ranges, num_bits)
 
-        # 进行差分变异运算，生成一个变异体
-        donor = [decoded_a[i] + F * (decoded_b[i] - decoded_c[i]) for i in range(len(decoded_a))]
+        if random.random() < mutation_rate:
+            # 触发差分变异，生成变异体
+            donor = [decoded_a[i] + F * (decoded_b[i] - decoded_c[i]) for i in range(len(decoded_a))]
+            donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
+            encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
+        else:
+            # 未触发差分变异，直接使用父代作为 donor
+            encoded_donor = a.binary_string
 
-        # 限制 donor 的值在 variable_ranges 范围内
-        donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
-
-        # 使用 encode_individual 编码 donor
-        encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
-
-        # 进行交叉操作，结合 donor 和父代个体生成新的个体
+        # 根据交叉概率进行交叉操作
         if random.random() < crossover_rate:
-            # 执行交叉操作
             offspring1, offspring2 = crossover(encoded_donor, a.binary_string, crossover_rate)
         else:
-            # 如果不交叉，直接将变异体加入 offspring
+            # 未触发交叉，直接使用 donor
             offspring1 = encoded_donor
             offspring2 = encoded_donor
 
-        # 将交叉后的个体加入 offspring 列表
+        # 将生成的个体加入种群
         offspring.append(Individual(binary_string=offspring1))
-        offspring.append(Individual(binary_string=offspring2))
-        print(len(offspring))
+        if len(offspring) < pop_size:  # 确保未超出要求的数量
+            offspring.append(Individual(binary_string=offspring2))
 
     return offspring
 
