@@ -35,14 +35,14 @@ def load_pred_model():
     """
     HTTP 接口：加载模型。
     """
-    weight_path = "weight/model.pth"
+    weight_path = "../model/weight/model.pth"
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # 初始化模型
     model = PopulationPredictorLSTM()
     # 加载模型权重
     load_model(model, weight_path, device)
     # 保存模型到全局变量
-    return jsonify({"status": "success", "message": "Model loaded."})
+    return jsonify({"status": "success", "message": "预测模型加载成功：" + weight_path})
 
 
 @app.route('/start', methods=['POST'])
@@ -116,7 +116,7 @@ def start_nsga_ii_pro(data, funcs, is_dynamic, variable_ranges):
         target=nsga2iipro,
         args=(visualizer, {0: [funcs, ['min', 'min']]}, variable_ranges, precision, pop_size, num_generations,
               crossover_rate, mutation_rate, is_dynamic, use_crossover_and_differential_mutation, F,
-              regeneration_ratio, use_prediction)
+              regeneration_ratio, use_prediction, model)
     ).start()
     print("nsga2iipro started.")
 
