@@ -27,6 +27,18 @@ visualizer = ObjectiveVisualizer(
     figsize=(12, 12)
 )
 
+#population = nsga2(
+#    funcs_dict={0: [[f1, f2], ['min', 'min']]},
+#    variable_ranges=variable_ranges,
+#    precision=0.01,
+#   pop_size=100,
+#    num_generations=10,
+#    visualizer=visualizer,
+#    dynamic_funcs=True,  # 使用动态目标函数
+#    use_prediction=False
+#    crossover_rate=0.9,
+#    mutation_rate=0.01
+#)
 population = nsga2iipro(
     funcs_dict={0: [[f1, f2], ['min', 'min']]},
     variable_ranges=variable_ranges,
@@ -36,7 +48,8 @@ population = nsga2iipro(
     visualizer=visualizer,
     dynamic_funcs=True,  # 使用动态目标函数
     use_crossover_and_differential_mutation=True, # 使用差分交叉变异
-    F=0.5
+    F=0.5,
+    use_prediction=True
     # crossover_rate=0.9,
     # mutation_rate=0.01
 )
