@@ -371,7 +371,7 @@ def crossover_and_differential_mutation(
             # 触发差分变异，生成变异体
             donor = [decoded_a[i] + F * (decoded_b[i] - decoded_c[i]) for i in range(len(decoded_a))]
             donor = [min(max(donor[i], var_min[i]), var_max[i]) for i in range(len(donor))]
-            encoded_donor = encode_individual(donor, var_min=min(var_min), var_max=max(var_max), precision=precision)
+            encoded_donor = encode_individual(donor,variable_ranges, precision=precision)
         else:
             # 未触发差分变异，直接使用父代作为 donor
             encoded_donor = a.binary_string
