@@ -75,6 +75,9 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     adaptability_metric = AdaptabilityMetric(threshold=0.1)
     # 初始化动态多样性度量对象
     diversity_metric = DiversityMetric()
+    # 用于存储每一代的适应性度量值和多样性变化
+    adaptability_scores = []
+    diversity_changes = []
 
     # 迭代进化过程
     for generation in range(num_generations):
@@ -139,6 +142,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
             adaptability_score = adaptability_metric.calculate_adaptation(current_objectives=current_objectives,
                                                                           previous_objectives=previous_objectives,
                                                                           generation=generation)
+            adaptability_scores.append(adaptability_score)  # 存储每代的适应性度量值
             print(f"[naga-ii-pro] 第 {generation + 1} 代的适应性度量值: {adaptability_score:.4f}")
             # 更新当前目标函数值
             previous_objectives = current_objectives
@@ -150,6 +154,7 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
                                                                             num_bits)  # 计算当前代的多样性
         # 计算多样性变化
         diversity_change = abs(current_diversity - previous_diversity) / previous_diversity
+        diversity_changes.append(diversity_change)  # 存储每代的多样性变化
         print(f"[naga-ii-pro] 第 {generation + 1} 代的多样性变化: {diversity_change:.4f}")
         # 合并父代和子代生成 2N 个体的种群
         combined_population = population + offspring
@@ -190,7 +195,20 @@ def nsga2iipro(visualizer, funcs_dict, variable_ranges, precision, pop_size=100,
     # 返回最终种群的解
     final_solutions = [adapter_decode_individual(ind, variable_ranges, num_bits) for ind in population]
     print(f"mps = {np.mean(mps_values)}")
+
+    # 在所有代数迭代结束后输出所有适应性度量值和多样性变化
+    print("\n nsgaiipro适应性度量值和多样性变化记录：")
+    for i in range(num_generations):
+        print(f"第 {i + 1} 代：适应性度量值: {adaptability_scores[i]:.4f}  多样性变化: {diversity_changes[i]:.4f}")
+
+    # 计算并输出平均适应性度量值和平均多样性变化
+    average_adaptability_score = sum(adaptability_scores) / len(adaptability_scores) if adaptability_scores else 0
+    average_diversity_change = sum(diversity_changes) / len(diversity_changes) if diversity_changes else 0
+
+    print(f"\n平均适应性度量值: {average_adaptability_score:.4f}")
+    print(f"平均多样性变化: {average_diversity_change:.4f}")
     return final_solutions
+
 
 
 # ======================
